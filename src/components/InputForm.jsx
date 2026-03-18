@@ -201,15 +201,6 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         </div>
       </div>
 
-      <div className="sf-assumptions" role="note" aria-label="Model assumptions">
-        <div className="sf-assumptions-title">Assumptions</div>
-        <ul className="sf-assumptions-list">
-          {assumptions.map((assumption) => (
-            <li key={assumption}>{assumption}</li>
-          ))}
-        </ul>
-      </div>
-
       <PersonSection
         title="You"
         accent="you"
@@ -304,6 +295,17 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       <button type="submit" className="btn-calc" disabled={loading}>
         {loading ? <><span className="spinner" /> Calculating...</> : "Calculate"}
       </button>
+
+      <details className="sf-assumptions">
+        <summary className="sf-assumptions-summary">Assumptions</summary>
+        <div className="sf-assumptions-body" role="note" aria-label="Model assumptions">
+          <ul className="sf-assumptions-list">
+            {assumptions.map((assumption) => (
+              <li key={assumption}>{assumption}</li>
+            ))}
+          </ul>
+        </div>
+      </details>
     </form>
   );
 }
