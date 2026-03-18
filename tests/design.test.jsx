@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 import MetricCards from "../src/components/MetricCards.jsx";
 
 afterEach(cleanup);
@@ -186,5 +186,29 @@ describe("Country toggle", () => {
     expect(yearSelect).toBeTruthy();
     expect(yearSelect.value).toBe("2026");
     expect(yearSelect.options.length).toBe(3);
+  });
+
+  it("renders a collapsed assumptions summary", async () => {
+    const { default: InputForm } = await import("../src/components/InputForm.jsx");
+    const assumptionCountry = {
+      ...country,
+      hasDisability: true,
+      hasPregnancy: true,
+      hasESI: true,
+    };
+    render(<InputForm country={assumptionCountry} countries={countries} countryId="us" onCountryChange={() => {}} onCalculate={() => {}} loading={false} />);
+
+    const details = document.querySelector(".sf-assumptions");
+    expect(details).toBeTruthy();
+    expect(details.open).toBe(false);
+
+    const summary = within(details).getByText("Assumptions");
+    expect(summary).toBeTruthy();
+    fireEvent.click(summary);
+
+    const note = within(details).getByRole("note", { name: "Model assumptions" });
+    expect(within(note).getByText(/wages and salaries only/i)).toBeTruthy();
+    expect(within(note).getByText(/all children are assigned to you/i)).toBeTruthy();
+    expect(within(note).getByText(/healthcare benefits are excluded from the analysis/i)).toBeTruthy();
   });
 });
