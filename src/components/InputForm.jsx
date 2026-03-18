@@ -16,6 +16,12 @@ function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
 }
 
+function joinWithAnd(items) {
+  if (items.length <= 1) return items[0] || "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
 const DEFAULT_INCOME = 45000;
 
 export default function InputForm({ country, countries, countryId, onCountryChange, onCalculate, onInputChange, loading, initialValues, externalIncomes }) {
@@ -42,6 +48,18 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   const [errors, setErrors] = useState({});
   const hasMounted = useRef(false);
   const childrenKey = children.map((c) => `${c.age}:${c.isDisabled}`).join(",");
+  const adultInputs = ["age"];
+  if (country.hasDisability) adultInputs.push("disability");
+  if (country.hasPregnancy) adultInputs.push("pregnancy");
+  if (country.hasESI) adultInputs.push("ESI status");
+  const assumptions = [
+    `The calculator uses only the inputs shown here: ${country.regionLabel.toLowerCase()}, year, each adult's wages, ${joinWithAnd(adultInputs)}, and each child's ${country.hasDisability ? "age and disability" : "age"}.`,
+    "Income means wages and salaries only. Unearned income, self-employment income, rent, childcare expenses, deductions, and other omitted income or expense inputs are assumed to be zero.",
+    "For the unmarried comparison, all children are assigned to you and your partner is simulated separately without children.",
+  ];
+  if (country.hasESI) {
+    assumptions.push("If Has ESI is checked, healthcare benefits are excluded from the analysis.");
+  }
 
   // Reset region and defaults when country changes
   const prevCountryId = useRef(country.id);
@@ -181,6 +199,15 @@ export default function InputForm({ country, countries, countryId, onCountryChan
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="sf-assumptions" role="note" aria-label="Model assumptions">
+        <div className="sf-assumptions-title">Assumptions</div>
+        <ul className="sf-assumptions-list">
+          {assumptions.map((assumption) => (
+            <li key={assumption}>{assumption}</li>
+          ))}
+        </ul>
       </div>
 
       <PersonSection

@@ -226,6 +226,33 @@ body {
   gap: 1rem;
 }
 
+.sf-assumptions {
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--color-primary-200);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-50);
+}
+
+.sf-assumptions-title {
+  margin-bottom: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-heading);
+}
+
+.sf-assumptions-list {
+  padding-left: 1.05rem;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.sf-assumptions-list li + li {
+  margin-top: 0.35rem;
+}
+
 /* Row of two fields side-by-side */
 .sf-row {
   display: flex;
