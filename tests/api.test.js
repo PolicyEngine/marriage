@@ -7,9 +7,9 @@
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
-import { getPrograms, getCategorizedPrograms, buildCellResults } from "../src/api.js";
-import metadata from "../src/metadata.json";
-import ukMetadata from "../src/metadata-uk.json";
+import { getPrograms, getCategorizedPrograms, buildCellResults } from "../lib/api.js";
+import metadata from "../lib/metadata.json";
+import ukMetadata from "../lib/metadata-uk.json";
 
 // Tolerance for floating-point aggregate vs sum-of-parts comparisons.
 // The API returns rounded values; $2 covers any rounding.

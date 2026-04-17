@@ -1,15 +1,22 @@
-import React, { useState, useEffect, useRef } from "react";
+"use client";
+
+import { useState, useEffect, useRef } from "react";
 import InputForm from "./components/InputForm";
 import ResultsDisplay from "./components/ResultsDisplay";
-import { getCategorizedPrograms, getHeatmapData } from "./api";
-import { formatCurrency } from "./utils";
-import { getCountry, COUNTRIES } from "./countries";
+import SiteHeader from "./components/SiteHeader";
+import { getCategorizedPrograms, getHeatmapData } from "@/lib/api";
+import { formatCurrency } from "@/lib/utils";
+import { getCountry, COUNTRIES } from "@/lib/countries";
+
+const BASE_PATH =
+  process.env.NEXT_PUBLIC_BASE_PATH === ""
+    ? ""
+    : process.env.NEXT_PUBLIC_BASE_PATH || "/us/marriage";
 
 // URL state helpers
-function encodeToHash(countryId, formData) {
+function encodeToHash(countryId, formData, isEmbedded) {
   const country = getCountry(countryId);
   const p = new URLSearchParams();
-  const isEmbedded = window.self !== window.top;
   if (countryId !== "us" && !isEmbedded) p.set("country", countryId);
   p.set("region", formData.regionCode || formData.stateCode);
   p.set("head", formData.headIncome);
@@ -37,11 +44,11 @@ function encodeToHash(countryId, formData) {
 }
 
 function decodeFromHash() {
+  if (typeof window === "undefined") return null;
   const hash = window.location.hash.slice(1);
   if (!hash) return null;
   try {
     const p = new URLSearchParams(hash);
-    // Support both old "state" param and new "region" param
     const region = p.get("region") || p.get("state");
     if (!region || !p.has("head")) return null;
     const countryId = p.get("country") || "us";
@@ -84,13 +91,17 @@ function decodeFromHash() {
   }
 }
 
-export default function App() {
-  const decoded = useRef(decodeFromHash());
-  // Read country from hash even if full form data isn't present (e.g. #country=uk from parent route)
-  const hashCountry = new URLSearchParams(window.location.hash.slice(1)).get("country");
-  const [countryId, setCountryId] = useState(decoded.current?.countryId || hashCountry || "us");
+export default function MarriageApp({ initialCountry = null }) {
+  const decoded = useRef(null);
+  // Seed with initialCountry — supplied by the server component from the
+  // rewrite destination's ?country= query, since Next rewrites are reverse
+  // proxies and the browser URL (hence window.location.search) stays at the
+  // host path. Keeping it in useState's initial value makes SSR and the first
+  // client render agree, so /uk/marriage hydrates straight into UK.
+  const [countryId, setCountryId] = useState(initialCountry || "us");
+  const [isEmbedded, setIsEmbedded] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const country = getCountry(countryId);
-  const isEmbedded = window.self !== window.top;
 
   const [results, setResults] = useState(null);
   const [heatmapData, setHeatmapData] = useState(null);
@@ -103,6 +114,18 @@ export default function App() {
   const [externalIncomes, setExternalIncomes] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const didAutoCalc = useRef(false);
+
+  // Resolve browser-only state after mount.
+  // initialCountry already seeded countryId (for the rewrite path), so it
+  // stays in the chain here as the final fallback before "us".
+  useEffect(() => {
+    decoded.current = decodeFromHash();
+    const hashCountry = new URLSearchParams(window.location.hash.slice(1)).get("country");
+    const resolvedCountry = decoded.current?.countryId || hashCountry || initialCountry || "us";
+    setCountryId(resolvedCountry);
+    setIsEmbedded(window.self !== window.top);
+    setMounted(true);
+  }, [initialCountry]);
 
   // Swap favicon for valentine mode
   useEffect(() => {
@@ -117,7 +140,7 @@ export default function App() {
         + '</svg>'
       );
     } else {
-      link.href = import.meta.env.BASE_URL + "favicon.svg";
+      link.href = `${BASE_PATH}/favicon.svg`;
     }
   }, [valentine]);
 
@@ -150,7 +173,7 @@ export default function App() {
 
   async function handleCalculate(data) {
     setFormData(data);
-    const hash = `#${encodeToHash(countryId, data)}`;
+    const hash = `#${encodeToHash(countryId, data, isEmbedded)}`;
     window.history.replaceState(null, "", hash);
     if (window.self !== window.top) {
       window.parent.postMessage({ type: "hashchange", hash }, "*");
@@ -203,14 +226,16 @@ export default function App() {
 
   // Auto-calculate if URL has params on first load
   useEffect(() => {
+    if (!mounted) return;
     if (decoded.current && !didAutoCalc.current) {
       didAutoCalc.current = true;
       handleCalculate(decoded.current);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted]);
 
   return (
-    <div className={`app ${valentine ? "valentine" : ""}`}>
+    <div className={`app ${valentine ? "valentine" : ""} ${isEmbedded ? "is-embedded" : "is-standalone"}`}>
       {valentine && <div className="hearts-bg" aria-hidden="true" />}
       {showConfetti && (
         <div className="heart-confetti" aria-hidden="true">
@@ -226,80 +251,104 @@ export default function App() {
         </div>
       )}
 
-      <header className="app-header">
-        <div className="header-text">
-          <h1>{valentine ? "Love & taxes calculator" : "Marriage calculator"}</h1>
-          <p>
-            {valentine
-              ? "Will tying the knot cost you? Find out this Valentine\u2019s Day."
-              : <>See how marriage would change your taxes and benefits. <span className="vday-hint">&hearts; Press V</span></>}
-          </p>
-        </div>
-      </header>
+      {!isEmbedded && <SiteHeader />}
 
-      <div className="app-layout">
-        <aside className={`app-sidebar ${results ? "has-results" : ""} ${sidebarOpen ? "sidebar-open" : ""}`}>
-          {results && (
-            <button
-              type="button"
-              className="sidebar-toggle"
-              onClick={() => setSidebarOpen((v) => !v)}
-            >
-              <span className="sidebar-toggle-summary">
-                {formData?.regionCode || formData?.stateCode} &middot; {formatCurrency(formData?.headIncome ?? 0, false, country.currencySymbol)} &amp; {formatCurrency(formData?.spouseIncome ?? 0, false, country.currencySymbol)}
-              </span>
-              <span className="sidebar-toggle-arrow">{sidebarOpen ? "\u25B2" : "\u25BC"}</span>
-            </button>
-          )}
-          <div className="sidebar-collapsible">
-            <InputForm
-              country={country}
-              countries={isEmbedded ? null : COUNTRIES}
-              countryId={countryId}
-              onCountryChange={handleCountryChange}
-              onCalculate={(data) => { setSidebarOpen(false); handleCalculate(data); }}
-              onInputChange={() => { setResults(null); setHeatmapData(null); }}
-              loading={loading}
-              initialValues={decoded.current}
-              externalIncomes={externalIncomes}
-            />
-            <footer className="app-footer">
-              Powered by <a href="https://policyengine.org" target="_blank" rel="noopener noreferrer">PolicyEngine</a>
-            </footer>
+      <div className="app-shell">
+        <header className="app-header">
+          <div className="header-text">
+            <h1>{valentine ? "Love & taxes calculator" : "Marriage calculator"}</h1>
+            <p>
+              {valentine
+                ? "Will tying the knot cost you? Find out this Valentine\u2019s Day."
+                : <>See how marriage would change your taxes and benefits. <span className="vday-hint">&hearts; Press V</span></>}
+            </p>
           </div>
-        </aside>
+        </header>
 
-        <main className="app-main">
-          {error && <div className="error">{error}</div>}
-
-          {loading && (
-            <div className="main-placeholder">
-              <span className="spinner" /> Calculating...
+        <div className="app-layout">
+          <aside className={`app-sidebar ${results ? "has-results" : ""} ${sidebarOpen ? "sidebar-open" : ""}`}>
+            {results && (
+              <button
+                type="button"
+                className="sidebar-toggle"
+                onClick={() => setSidebarOpen((v) => !v)}
+              >
+                <span className="sidebar-toggle-summary">
+                  {formData?.regionCode || formData?.stateCode} &middot; {formatCurrency(formData?.headIncome ?? 0, false, country.currencySymbol)} &amp; {formatCurrency(formData?.spouseIncome ?? 0, false, country.currencySymbol)}
+                </span>
+                <span className="sidebar-toggle-arrow">{sidebarOpen ? "\u25B2" : "\u25BC"}</span>
+              </button>
+            )}
+            <div className="sidebar-collapsible">
+              <InputForm
+                country={country}
+                countries={isEmbedded ? null : COUNTRIES}
+                countryId={countryId}
+                onCountryChange={handleCountryChange}
+                onCalculate={(data) => { setSidebarOpen(false); handleCalculate(data); }}
+                onInputChange={() => { setResults(null); setHeatmapData(null); }}
+                loading={loading}
+                initialValues={decoded.current}
+                externalIncomes={externalIncomes}
+              />
             </div>
-          )}
+          </aside>
 
-          {!results && !loading && (
-            <div className="main-placeholder">
-              Enter your details and press Calculate to see results.
-            </div>
-          )}
+          <main className="app-main">
+            {error && <div className="error">{error}</div>}
 
-          {results && (
-            <ResultsDisplay
-              results={results}
-              heatmapData={heatmapData}
-              heatmapLoading={heatmapLoading}
-              headIncome={formData?.headIncome ?? 0}
-              spouseIncome={formData?.spouseIncome ?? 0}
-              valentine={valentine}
-              onCellClick={handleCellClick}
-              esiStatus={formData?.esiStatus}
-              country={country}
-            />
-          )}
-        </main>
+            {loading && (
+              <div className="main-placeholder">
+                <span className="spinner" /> Calculating...
+              </div>
+            )}
+
+            {!results && !loading && (
+              <div className="main-placeholder main-placeholder--intro">
+                <div className="intro-card">
+                  <h2>What would marriage mean for your taxes?</h2>
+                  <p>
+                    Tax and benefit rules can reward or punish marriage. Enter
+                    your household details on the left and we&rsquo;ll compare
+                    your net income if you stay single or tie the knot, program
+                    by program.
+                  </p>
+                  <ul className="intro-highlights">
+                    <li>Federal and state taxes</li>
+                    <li>Means-tested benefits and credits</li>
+                    <li>Income heatmap across the full income range</li>
+                  </ul>
+                  <p className="intro-cta">Press <strong>Calculate</strong> to begin.</p>
+                </div>
+              </div>
+            )}
+
+            {results && (
+              <ResultsDisplay
+                results={results}
+                heatmapData={heatmapData}
+                heatmapLoading={heatmapLoading}
+                headIncome={formData?.headIncome ?? 0}
+                spouseIncome={formData?.spouseIncome ?? 0}
+                valentine={valentine}
+                onCellClick={handleCellClick}
+                esiStatus={formData?.esiStatus}
+                country={country}
+              />
+            )}
+          </main>
+        </div>
+
+        <footer className="app-footer">
+          <span>
+            Powered by{" "}
+            <a href="https://policyengine.org" target="_blank" rel="noopener noreferrer">PolicyEngine</a>
+            {!isEmbedded && (
+              <> &middot; <a href="https://github.com/PolicyEngine/marriage" target="_blank" rel="noopener noreferrer">Source on GitHub</a></>
+            )}
+          </span>
+        </footer>
       </div>
-
     </div>
   );
 }

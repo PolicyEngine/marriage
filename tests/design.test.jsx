@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import React from "react";
 import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
-import MetricCards from "../src/components/MetricCards.jsx";
+import MetricCards from "../app/components/MetricCards.jsx";
 
 afterEach(cleanup);
 
@@ -158,7 +158,7 @@ describe("Country toggle", () => {
   };
 
   it("renders country toggle buttons", async () => {
-    const { default: InputForm } = await import("../src/components/InputForm.jsx");
+    const { default: InputForm } = await import("../app/components/InputForm.jsx");
     render(<InputForm country={country} countries={countries} countryId="us" onCountryChange={() => {}} onCalculate={() => {}} loading={false} />);
 
     const toggle = document.querySelector(".country-toggle");
@@ -170,7 +170,7 @@ describe("Country toggle", () => {
   });
 
   it("active country has active class", async () => {
-    const { default: InputForm } = await import("../src/components/InputForm.jsx");
+    const { default: InputForm } = await import("../app/components/InputForm.jsx");
     render(<InputForm country={country} countries={countries} countryId="us" onCountryChange={() => {}} onCalculate={() => {}} loading={false} />);
 
     const buttons = document.querySelectorAll(".country-toggle button");
@@ -179,7 +179,7 @@ describe("Country toggle", () => {
   });
 
   it("renders year as a select dropdown", async () => {
-    const { default: InputForm } = await import("../src/components/InputForm.jsx");
+    const { default: InputForm } = await import("../app/components/InputForm.jsx");
     render(<InputForm country={country} countries={countries} countryId="us" onCountryChange={() => {}} onCalculate={() => {}} loading={false} />);
 
     const yearSelect = document.querySelector(".sf-year select");
@@ -189,7 +189,7 @@ describe("Country toggle", () => {
   });
 
   it("renders a collapsed assumptions summary", async () => {
-    const { default: InputForm } = await import("../src/components/InputForm.jsx");
+    const { default: InputForm } = await import("../app/components/InputForm.jsx");
     const assumptionCountry = {
       ...country,
       hasDisability: true,

@@ -1,6 +1,5 @@
 # Node
 node_modules/
-dist/
 
 # Python (fixture generator script)
 __pycache__/
@@ -12,9 +11,6 @@ __pycache__/
 env/
 venv/
 
-# Vite
-.vite/
-
 # IDE
 .idea/
 .vscode/
@@ -24,3 +20,11 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code launch configs
+.claude/
+
+# Next.js
+.next/
+out/
+next-env.d.ts

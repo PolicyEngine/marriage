@@ -6,7 +6,7 @@ import {
   VALENTINE_SCALE,
   fmtDollar,
   fmtShortDollar,
-} from "../heatmap-utils.js";
+} from "@/lib/heatmap-utils";
 
 const SVG_W = 650;
 const SVG_H = 500;

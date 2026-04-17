@@ -14,7 +14,7 @@ from policyengine_us import Simulation
 
 YEAR = "2026"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-META_PATH = os.path.join(SCRIPT_DIR, "..", "src", "metadata.json")
+META_PATH = os.path.join(SCRIPT_DIR, "..", "lib", "metadata.json")
 OUT_PATH = os.path.join(SCRIPT_DIR, "..", "tests", "fixtures.json")
 
 with open(META_PATH) as f:

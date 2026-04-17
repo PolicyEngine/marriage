@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://policyengine.github.io/marriage/sitemap.xml
+Sitemap: https://policyengine.org/us/marriage/sitemap.xml

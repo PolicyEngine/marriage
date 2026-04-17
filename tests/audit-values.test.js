@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
-import { getPrograms } from "../src/api.js";
+import { getPrograms } from "../lib/api.js";
 import fixtures from "./fixtures.json";
 
 const TOLERANCE = 2; // $2 tolerance for floating-point differences
