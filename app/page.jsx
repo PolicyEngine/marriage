@@ -114,7 +114,10 @@ export default function Page() {
   useEffect(() => {
     decoded.current = decodeFromHash();
     const hashCountry = new URLSearchParams(window.location.hash.slice(1)).get("country");
-    const resolvedCountry = decoded.current?.countryId || hashCountry || "us";
+    // Query-string fallback lets the multizone host send UK visitors to
+    // /us/marriage?country=uk (since the zone has a single basePath).
+    const queryCountry = new URLSearchParams(window.location.search).get("country");
+    const resolvedCountry = decoded.current?.countryId || hashCountry || queryCountry || "us";
     setCountryId(resolvedCountry);
     setIsEmbedded(window.self !== window.top);
     setMounted(true);
