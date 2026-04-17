@@ -1,16 +1,22 @@
-import React, { useState, useEffect, useRef } from "react";
+"use client";
+
+import { useState, useEffect, useRef } from "react";
 import InputForm from "./components/InputForm";
 import ResultsDisplay from "./components/ResultsDisplay";
 import SiteHeader from "./components/SiteHeader";
-import { getCategorizedPrograms, getHeatmapData } from "./api";
-import { formatCurrency } from "./utils";
-import { getCountry, COUNTRIES } from "./countries";
+import { getCategorizedPrograms, getHeatmapData } from "@/lib/api";
+import { formatCurrency } from "@/lib/utils";
+import { getCountry, COUNTRIES } from "@/lib/countries";
+
+const BASE_PATH =
+  process.env.NEXT_PUBLIC_BASE_PATH === ""
+    ? ""
+    : process.env.NEXT_PUBLIC_BASE_PATH || "/us/marriage";
 
 // URL state helpers
-function encodeToHash(countryId, formData) {
+function encodeToHash(countryId, formData, isEmbedded) {
   const country = getCountry(countryId);
   const p = new URLSearchParams();
-  const isEmbedded = window.self !== window.top;
   if (countryId !== "us" && !isEmbedded) p.set("country", countryId);
   p.set("region", formData.regionCode || formData.stateCode);
   p.set("head", formData.headIncome);
@@ -38,11 +44,11 @@ function encodeToHash(countryId, formData) {
 }
 
 function decodeFromHash() {
+  if (typeof window === "undefined") return null;
   const hash = window.location.hash.slice(1);
   if (!hash) return null;
   try {
     const p = new URLSearchParams(hash);
-    // Support both old "state" param and new "region" param
     const region = p.get("region") || p.get("state");
     if (!region || !p.has("head")) return null;
     const countryId = p.get("country") || "us";
@@ -85,13 +91,12 @@ function decodeFromHash() {
   }
 }
 
-export default function App() {
-  const decoded = useRef(decodeFromHash());
-  // Read country from hash even if full form data isn't present (e.g. #country=uk from parent route)
-  const hashCountry = new URLSearchParams(window.location.hash.slice(1)).get("country");
-  const [countryId, setCountryId] = useState(decoded.current?.countryId || hashCountry || "us");
+export default function Page() {
+  const decoded = useRef(null);
+  const [countryId, setCountryId] = useState("us");
+  const [isEmbedded, setIsEmbedded] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const country = getCountry(countryId);
-  const isEmbedded = window.self !== window.top;
 
   const [results, setResults] = useState(null);
   const [heatmapData, setHeatmapData] = useState(null);
@@ -104,6 +109,16 @@ export default function App() {
   const [externalIncomes, setExternalIncomes] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const didAutoCalc = useRef(false);
+
+  // Resolve browser-only state after mount
+  useEffect(() => {
+    decoded.current = decodeFromHash();
+    const hashCountry = new URLSearchParams(window.location.hash.slice(1)).get("country");
+    const resolvedCountry = decoded.current?.countryId || hashCountry || "us";
+    setCountryId(resolvedCountry);
+    setIsEmbedded(window.self !== window.top);
+    setMounted(true);
+  }, []);
 
   // Swap favicon for valentine mode
   useEffect(() => {
@@ -118,7 +133,7 @@ export default function App() {
         + '</svg>'
       );
     } else {
-      link.href = import.meta.env.BASE_URL + "favicon.svg";
+      link.href = `${BASE_PATH}/favicon.svg`;
     }
   }, [valentine]);
 
@@ -151,7 +166,7 @@ export default function App() {
 
   async function handleCalculate(data) {
     setFormData(data);
-    const hash = `#${encodeToHash(countryId, data)}`;
+    const hash = `#${encodeToHash(countryId, data, isEmbedded)}`;
     window.history.replaceState(null, "", hash);
     if (window.self !== window.top) {
       window.parent.postMessage({ type: "hashchange", hash }, "*");
@@ -204,11 +219,13 @@ export default function App() {
 
   // Auto-calculate if URL has params on first load
   useEffect(() => {
+    if (!mounted) return;
     if (decoded.current && !didAutoCalc.current) {
       didAutoCalc.current = true;
       handleCalculate(decoded.current);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted]);
 
   return (
     <div className={`app ${valentine ? "valentine" : ""} ${isEmbedded ? "is-embedded" : "is-standalone"}`}>

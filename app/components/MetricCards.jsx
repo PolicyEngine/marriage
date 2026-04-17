@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { formatCurrency, formatPercent } from "../utils";
+import { formatCurrency, formatPercent } from "@/lib/utils";
 
 function getShareUrl(countryId) {
   const hash = window.location.hash;

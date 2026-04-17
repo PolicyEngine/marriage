@@ -2,17 +2,20 @@
   "name": "marriage",
   "private": true,
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "NEXT_PUBLIC_BASE_PATH=\"\" next dev -p 5173",
+    "build": "next build",
+    "vercel-build": "next build",
+    "start": "next start",
+    "lint": "next lint",
     "metadata": "node scripts/update-metadata.cjs",
     "prebuild": "node scripts/update-metadata.cjs",
     "test": "vitest run",
+    "test:ci": "vitest run tests/api.test.js tests/design.test.jsx tests/heatmap.test.js",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "next": "^14.2.29",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -20,8 +23,9 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^4.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.29",
     "jsdom": "^28.0.0",
-    "vite": "^5.4.0",
     "vitest": "^4.0.18"
   }
 }

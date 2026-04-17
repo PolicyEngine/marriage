@@ -10,7 +10,7 @@ import {
   VALENTINE_SCALE,
   fmtDollar,
   fmtShortDollar,
-} from "../src/heatmap-utils.js";
+} from "../lib/heatmap-utils.js";
 
 // ---------- interpolateColor ----------
 

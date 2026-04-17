@@ -1,6 +1,7 @@
-import React from "react";
-
-const LOGO = import.meta.env.BASE_URL + "policyengine-white.svg";
+const BASE_PATH =
+  process.env.NEXT_PUBLIC_BASE_PATH === ""
+    ? ""
+    : process.env.NEXT_PUBLIC_BASE_PATH || "/us/marriage";
 
 export default function SiteHeader() {
   return (
@@ -13,7 +14,12 @@ export default function SiteHeader() {
           rel="noopener noreferrer"
           aria-label="PolicyEngine home"
         >
-          <img src={LOGO} alt="PolicyEngine" height="22" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`${BASE_PATH}/policyengine-white.svg`}
+            alt="PolicyEngine"
+            height="22"
+          />
         </a>
 
         <nav className="site-header-nav" aria-label="PolicyEngine">

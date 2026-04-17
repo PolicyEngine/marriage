@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, Suspense, lazy } from "react";
-import { computeTableData, formatCurrency, PROGRAM_DESCRIPTIONS } from "../utils";
-import { buildCellResults } from "../api";
+import { computeTableData, formatCurrency, PROGRAM_DESCRIPTIONS } from "@/lib/utils";
+import { buildCellResults } from "@/lib/api";
 import MetricCards from "./MetricCards";
 
 const Heatmap = lazy(() => import("./Heatmap"));

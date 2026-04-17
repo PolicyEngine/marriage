@@ -12,7 +12,7 @@ const fs = require("fs");
 const path = require("path");
 
 const API_URL = "https://api.policyengine.org/us/metadata";
-const OUT_PATH = path.join(__dirname, "..", "src", "metadata.json");
+const OUT_PATH = path.join(__dirname, "..", "lib", "metadata.json");
 
 // Year used to resolve parameter-backed "adds" references
 const YEAR = "2026";
