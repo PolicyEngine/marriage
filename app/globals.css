@@ -1467,10 +1467,6 @@ body {
     gap: 0.75rem;
   }
 
-  .metric-cards-section {
-    padding: 1rem;
-  }
-
   /* Table horizontal scroll */
   .table-scroll {
     overflow-x: auto;
@@ -1684,10 +1680,6 @@ body {
   --color-section-heading: #9D174D;
   --color-error-bg: #FFF1F2;
   --color-error-text: #9D174D;
-}
-
-.sf-nyc-toggle {
-  padding: 0.25rem 0;
 }
 
 .valentine .sf-child { border-color: #FECDD3; background: #FCE7F3; }
