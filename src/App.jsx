@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import InputForm from "./components/InputForm";
 import ResultsDisplay from "./components/ResultsDisplay";
+import SiteHeader from "./components/SiteHeader";
 import { getCategorizedPrograms, getHeatmapData } from "./api";
 import { formatCurrency } from "./utils";
 import { getCountry, COUNTRIES } from "./countries";
@@ -210,7 +211,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className={`app ${valentine ? "valentine" : ""}`}>
+    <div className={`app ${valentine ? "valentine" : ""} ${isEmbedded ? "is-embedded" : "is-standalone"}`}>
       {valentine && <div className="hearts-bg" aria-hidden="true" />}
       {showConfetti && (
         <div className="heart-confetti" aria-hidden="true">
@@ -226,80 +227,104 @@ export default function App() {
         </div>
       )}
 
-      <header className="app-header">
-        <div className="header-text">
-          <h1>{valentine ? "Love & taxes calculator" : "Marriage calculator"}</h1>
-          <p>
-            {valentine
-              ? "Will tying the knot cost you? Find out this Valentine\u2019s Day."
-              : <>See how marriage would change your taxes and benefits. <span className="vday-hint">&hearts; Press V</span></>}
-          </p>
-        </div>
-      </header>
+      {!isEmbedded && <SiteHeader />}
 
-      <div className="app-layout">
-        <aside className={`app-sidebar ${results ? "has-results" : ""} ${sidebarOpen ? "sidebar-open" : ""}`}>
-          {results && (
-            <button
-              type="button"
-              className="sidebar-toggle"
-              onClick={() => setSidebarOpen((v) => !v)}
-            >
-              <span className="sidebar-toggle-summary">
-                {formData?.regionCode || formData?.stateCode} &middot; {formatCurrency(formData?.headIncome ?? 0, false, country.currencySymbol)} &amp; {formatCurrency(formData?.spouseIncome ?? 0, false, country.currencySymbol)}
-              </span>
-              <span className="sidebar-toggle-arrow">{sidebarOpen ? "\u25B2" : "\u25BC"}</span>
-            </button>
-          )}
-          <div className="sidebar-collapsible">
-            <InputForm
-              country={country}
-              countries={isEmbedded ? null : COUNTRIES}
-              countryId={countryId}
-              onCountryChange={handleCountryChange}
-              onCalculate={(data) => { setSidebarOpen(false); handleCalculate(data); }}
-              onInputChange={() => { setResults(null); setHeatmapData(null); }}
-              loading={loading}
-              initialValues={decoded.current}
-              externalIncomes={externalIncomes}
-            />
-            <footer className="app-footer">
-              Powered by <a href="https://policyengine.org" target="_blank" rel="noopener noreferrer">PolicyEngine</a>
-            </footer>
+      <div className="app-shell">
+        <header className="app-header">
+          <div className="header-text">
+            <h1>{valentine ? "Love & taxes calculator" : "Marriage calculator"}</h1>
+            <p>
+              {valentine
+                ? "Will tying the knot cost you? Find out this Valentine\u2019s Day."
+                : <>See how marriage would change your taxes and benefits. <span className="vday-hint">&hearts; Press V</span></>}
+            </p>
           </div>
-        </aside>
+        </header>
 
-        <main className="app-main">
-          {error && <div className="error">{error}</div>}
-
-          {loading && (
-            <div className="main-placeholder">
-              <span className="spinner" /> Calculating...
+        <div className="app-layout">
+          <aside className={`app-sidebar ${results ? "has-results" : ""} ${sidebarOpen ? "sidebar-open" : ""}`}>
+            {results && (
+              <button
+                type="button"
+                className="sidebar-toggle"
+                onClick={() => setSidebarOpen((v) => !v)}
+              >
+                <span className="sidebar-toggle-summary">
+                  {formData?.regionCode || formData?.stateCode} &middot; {formatCurrency(formData?.headIncome ?? 0, false, country.currencySymbol)} &amp; {formatCurrency(formData?.spouseIncome ?? 0, false, country.currencySymbol)}
+                </span>
+                <span className="sidebar-toggle-arrow">{sidebarOpen ? "\u25B2" : "\u25BC"}</span>
+              </button>
+            )}
+            <div className="sidebar-collapsible">
+              <InputForm
+                country={country}
+                countries={isEmbedded ? null : COUNTRIES}
+                countryId={countryId}
+                onCountryChange={handleCountryChange}
+                onCalculate={(data) => { setSidebarOpen(false); handleCalculate(data); }}
+                onInputChange={() => { setResults(null); setHeatmapData(null); }}
+                loading={loading}
+                initialValues={decoded.current}
+                externalIncomes={externalIncomes}
+              />
             </div>
-          )}
+          </aside>
 
-          {!results && !loading && (
-            <div className="main-placeholder">
-              Enter your details and press Calculate to see results.
-            </div>
-          )}
+          <main className="app-main">
+            {error && <div className="error">{error}</div>}
 
-          {results && (
-            <ResultsDisplay
-              results={results}
-              heatmapData={heatmapData}
-              heatmapLoading={heatmapLoading}
-              headIncome={formData?.headIncome ?? 0}
-              spouseIncome={formData?.spouseIncome ?? 0}
-              valentine={valentine}
-              onCellClick={handleCellClick}
-              esiStatus={formData?.esiStatus}
-              country={country}
-            />
-          )}
-        </main>
+            {loading && (
+              <div className="main-placeholder">
+                <span className="spinner" /> Calculating...
+              </div>
+            )}
+
+            {!results && !loading && (
+              <div className="main-placeholder main-placeholder--intro">
+                <div className="intro-card">
+                  <h2>What would marriage mean for your taxes?</h2>
+                  <p>
+                    Tax and benefit rules can reward or punish marriage. Enter
+                    your household details on the left and we&rsquo;ll compare
+                    your net income if you stay single or tie the knot, program
+                    by program.
+                  </p>
+                  <ul className="intro-highlights">
+                    <li>Federal and state taxes</li>
+                    <li>Means-tested benefits and credits</li>
+                    <li>Income heatmap across the full income range</li>
+                  </ul>
+                  <p className="intro-cta">Press <strong>Calculate</strong> to begin.</p>
+                </div>
+              </div>
+            )}
+
+            {results && (
+              <ResultsDisplay
+                results={results}
+                heatmapData={heatmapData}
+                heatmapLoading={heatmapLoading}
+                headIncome={formData?.headIncome ?? 0}
+                spouseIncome={formData?.spouseIncome ?? 0}
+                valentine={valentine}
+                onCellClick={handleCellClick}
+                esiStatus={formData?.esiStatus}
+                country={country}
+              />
+            )}
+          </main>
+        </div>
+
+        <footer className="app-footer">
+          <span>
+            Powered by{" "}
+            <a href="https://policyengine.org" target="_blank" rel="noopener noreferrer">PolicyEngine</a>
+            {!isEmbedded && (
+              <> &middot; <a href="https://github.com/PolicyEngine/marriage" target="_blank" rel="noopener noreferrer">Source on GitHub</a></>
+            )}
+          </span>
+        </footer>
       </div>
-
     </div>
   );
 }
