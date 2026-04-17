@@ -10,6 +10,13 @@ const inter = Inter({
 const SITE_URL = "https://policyengine.org/us/marriage";
 const OG_IMAGE = "https://policyengine.org/us/marriage/og-image.png";
 
+// Paths referenced in <head> must be explicitly prefixed — Next does not apply
+// basePath to metadata.icons values the way it does for <Image> or <Link>.
+const BASE_PATH =
+  process.env.NEXT_PUBLIC_BASE_PATH === ""
+    ? ""
+    : process.env.NEXT_PUBLIC_BASE_PATH || "/us/marriage";
+
 export const metadata = {
   title: "Marriage Tax Calculator — Marriage Penalty & Bonus | PolicyEngine",
   description:
@@ -33,7 +40,7 @@ export const metadata = {
     images: [OG_IMAGE],
     site: "@ThePolicyEngine",
   },
-  icons: { icon: "/favicon.svg" },
+  icons: { icon: `${BASE_PATH}/favicon.svg` },
   other: {
     "theme-color": "#319795",
     "google-site-verification": "e0FQ3UjJN2lisTAFsgKrfoIO9BbU6nTO2sROpKntyAo",
