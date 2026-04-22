@@ -1,4 +1,5 @@
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const inter = Inter({
@@ -9,6 +10,11 @@ const inter = Inter({
 
 const SITE_URL = "https://policyengine.org/us/marriage";
 const OG_IMAGE = "https://policyengine.org/us/marriage/og-image.png";
+
+// Matches the GA4 property used by policyengine-app-v2/website so
+// page_view and tool_engaged events from this calculator land in the
+// same account as the rest of policyengine.org traffic.
+const GA_MEASUREMENT_ID = "G-2YHG89FY0N";
 
 // Paths referenced in <head> must be explicitly prefixed — Next does not apply
 // basePath to metadata.icons values the way it does for <Image> or <Link>.
@@ -68,6 +74,21 @@ const STRUCTURED_DATA = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={inter.className}>
+      <head>
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            window.gtag = gtag;
+            gtag('js', new Date());
+            gtag('config', '${GA_MEASUREMENT_ID}');
+          `}
+        </Script>
+      </head>
       <body>
         {children}
         <script

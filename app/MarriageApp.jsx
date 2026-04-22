@@ -127,6 +127,23 @@ export default function MarriageApp({ initialCountry = null }) {
     setMounted(true);
   }, [initialCountry]);
 
+  // Fire the tool_engaged conversion event after the user has been on
+  // the page long enough to count as genuinely engaged. Matches the
+  // 15-second threshold and event shape used by policyengine-app-v2's
+  // AppClient so these conversions feed into the same GA4/Google Ads
+  // reporting as the other tools.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (typeof window !== "undefined" && window.gtag) {
+        window.gtag("event", "tool_engaged", {
+          tool_name: "marriage",
+          tool_title: "Marriage Tax Calculator",
+        });
+      }
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Swap favicon for valentine mode
   useEffect(() => {
     const link = document.querySelector('link[rel="icon"]');
