@@ -93,13 +93,13 @@ export default function RootLayout({ children }) {
         </Script>
       </head>
       <body>
-        <PolicyEngineShell country="us">
-        {children}
-        <script
+                <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
         />
-              </PolicyEngineShell>
+        <PolicyEngineShell country="us">
+          {children}
+        </PolicyEngineShell>
       </body>
     </html>
   );
