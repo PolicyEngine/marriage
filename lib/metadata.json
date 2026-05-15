@@ -31,9 +31,14 @@
       "label": "reduced price school meals"
     },
     {
-      "variable": "spm_unit_broadband_subsidy",
+      "variable": "acp",
       "entity": "spm_unit",
-      "label": "SPM unit broadband subsidy"
+      "label": "Affordable Connectivity Program"
+    },
+    {
+      "variable": "ebb",
+      "entity": "spm_unit",
+      "label": "Emergency Broadband Benefit amount"
     },
     {
       "variable": "tanf",
@@ -138,6 +143,16 @@
       "variable": "household_state_tax_before_refundable_credits",
       "entity": "household",
       "label": "household State tax before refundable credits"
+    },
+    {
+      "variable": "local_income_tax_before_refundable_credits",
+      "entity": "tax_unit",
+      "label": "Local income tax before refundable credits"
+    },
+    {
+      "variable": "local_occupational_tax",
+      "entity": "tax_unit",
+      "label": "Local occupational tax"
     }
   ],
   "healthcare": [
@@ -152,9 +167,9 @@
       "label": "Average CHIP payment"
     },
     {
-      "variable": "aca_ptc",
+      "variable": "assigned_aca_ptc",
       "entity": "tax_unit",
-      "label": "ACA premium tax credit for tax unit"
+      "label": "Assigned ACA premium tax credit for tax unit"
     },
     {
       "variable": "co_omnisalud",
@@ -522,6 +537,11 @@
         "label": "NE EITC amount"
       },
       {
+        "variable": "ne_stillborn_credit",
+        "entity": "tax_unit",
+        "label": "Nebraska stillborn child tax credit"
+      },
+      {
         "variable": "ne_refundable_ctc",
         "entity": "tax_unit",
         "label": "Nebraska refundable Child Tax Credit"
@@ -650,6 +670,11 @@
         "variable": "or_ctc",
         "entity": "tax_unit",
         "label": "Oregon Child Tax Credit"
+      },
+      {
+        "variable": "or_529_credit",
+        "entity": "tax_unit",
+        "label": "Oregon 529 plan contribution credit"
       },
       {
         "variable": "or_working_family_household_and_dependent_care_credit",
