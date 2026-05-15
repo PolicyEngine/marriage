@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import InputForm from "./components/InputForm";
 import ResultsDisplay from "./components/ResultsDisplay";
-import SiteHeader from "./components/SiteHeader";
 import { getCategorizedPrograms, getHeatmapData } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 import { getCountry, COUNTRIES } from "@/lib/countries";
@@ -267,9 +266,6 @@ export default function MarriageApp({ initialCountry = null }) {
           ))}
         </div>
       )}
-
-      {!isEmbedded && <SiteHeader />}
-
       <div className="app-shell">
         <header className="app-header">
           <div className="header-text">
