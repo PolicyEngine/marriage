@@ -1,5 +1,4 @@
 import { PolicyEngineShell } from "@policyengine/ui-kit/layout";
-import "@policyengine/ui-kit/styles.css";
 
 import { Inter } from "next/font/google";
 import Script from "next/script";
