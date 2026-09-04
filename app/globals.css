@@ -1936,3 +1936,37 @@ body {
   color: var(--color-text-light);
   cursor: not-allowed;
 }
+
+/* ---------- Site shell footer ---------- */
+
+/* The shared PolicyEngineShell footer stacks its links in a tall single
+   column, which on a narrow tool page like this one takes more vertical space
+   than the calculator's own footer line. Lay the links out as a wrapping row
+   and tighten the surrounding spacing. Presentation only, scoped to this app:
+   the shell's markup is untouched, so this is a local override rather than a
+   change to the shared component. Tailwind utilities are single-class
+   specificity, so these selectors win without !important. */
+
+.app-shell-footer-compact footer .grid,
+body footer .grid {
+  margin-top: 1.25rem;
+  gap: 1rem;
+}
+
+/* The link stack: flex-col gap-1 inside the footer grid */
+body footer .grid .flex-col.gap-1 {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 1.5rem;
+  row-gap: 0.4rem;
+}
+
+/* Copyright line sits alongside rather than below */
+body footer .grid .flex-col.gap-3 {
+  gap: 0.5rem;
+}
+
+body footer .grid > div {
+  gap: 1rem;
+}
