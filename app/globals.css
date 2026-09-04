@@ -1689,17 +1689,19 @@ body {
 
 /* ---- Footer ---- */
 .app-footer {
-  margin-top: 2rem;
-  padding-top: 1.25rem;
+  margin-top: 0.9rem;
+  padding-top: 0.6rem;
+  padding-bottom: 0.1rem;
+  line-height: 1.3;
   text-align: center;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   color: var(--color-text-light);
   border-top: 1px solid var(--color-border-light);
 }
 .app.is-embedded .app-footer {
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  font-size: 0.78rem;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  font-size: 0.74rem;
   border-top-color: transparent;
 }
 .app-footer a {
@@ -1761,4 +1763,107 @@ body {
   border-radius: var(--radius-md);
   padding: 0.6rem 0.7rem;
   margin: 0 0 0.2rem;
+}
+
+
+/* ---------- "More details" panel ---------- */
+
+.sf-more {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.sf-more-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-heading);
+  cursor: pointer;
+  list-style: none;
+}
+
+.sf-more-summary::-webkit-details-marker {
+  display: none;
+}
+
+.sf-more-summary::after {
+  content: "+";
+  margin-left: auto;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.sf-more[open] .sf-more-summary::after {
+  content: "\2212";
+}
+
+/* Count of optional inputs actually set, so a collapsed panel never hides
+   something that is changing the result. */
+.sf-more-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--color-primary-100, var(--color-border));
+  color: var(--color-heading);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.sf-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.15rem 0.75rem 0.8rem;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.sf-more-body > .sf-children {
+  border-top: none;
+  padding-top: 0;
+}
+
+.sf-more-people {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Per-adult optional fields, colour-matched to the person sections above */
+.sf-extra {
+  border-left: 2px solid var(--color-border);
+  padding-left: 0.6rem;
+}
+
+.sf-extra--you { border-left-color: var(--accent-you-text, var(--color-border)); }
+.sf-extra--partner { border-left-color: var(--accent-partner-text, var(--color-border)); }
+
+.sf-extra-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+/* Narrow money column that pairs with a wider select on the same row */
+.sf-money {
+  width: 108px;
+  flex-shrink: 0;
+}
+
+.sf-input-prefix input:disabled {
+  background: var(--color-bg);
+  color: var(--color-text-light);
+  cursor: not-allowed;
 }

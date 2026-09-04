@@ -41,7 +41,6 @@ function encodeToHash(countryId, formData, isEmbedded) {
   }
   // UK Universal Credit inputs. Only written when non-default so existing
   // shared links keep their current shape.
-  if (formData.hasPartner === false) p.set("single", "1");
   if (formData.rent) p.set("rent", formData.rent);
   if (formData.tenureType && formData.tenureType !== "RENT_PRIVATELY") {
     p.set("tenure", formData.tenureType);
@@ -99,7 +98,6 @@ function decodeFromHash() {
       },
       children,
       year: p.get("year") || country.defaultYear,
-      hasPartner: p.get("single") !== "1",
       rent: Number(p.get("rent") || 0),
       tenureType: p.get("tenure") || "RENT_PRIVATELY",
       childcareCosts: Number(p.get("cc") || 0),

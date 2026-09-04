@@ -7,7 +7,10 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { createSituation, splitExtras, deductRent, UK_EXTRAS_DEFAULTS } from "../lib/api.js";
+import {
+  createSituation, splitExtras, deductRent, housingCostFor, isRentedTenure,
+  UK_EXTRAS_DEFAULTS,
+} from "../lib/api.js";
 import { COUNTRIES } from "../lib/countries.js";
 
 const Y = "2025";
@@ -152,5 +155,54 @@ describe("UK config", () => {
   it("leaves the US config untouched", () => {
     expect(COUNTRIES.us.hasHousing).toBeUndefined();
     expect(COUNTRIES.us.gridConfig.some((g) => g.deductRent)).toBe(false);
+  });
+});
+
+describe("tenure: owners have no rent to deduct", () => {
+  const aggs = { householdNetIncome: 40000, householdNetIncomeWithHealth: 40000 };
+
+  it("treats the three rented tenures as renting", () => {
+    expect(isRentedTenure("RENT_PRIVATELY")).toBe(true);
+    expect(isRentedTenure("RENT_FROM_COUNCIL")).toBe(true);
+    expect(isRentedTenure("RENT_FROM_HA")).toBe(true);
+  });
+
+  it("treats owned tenures as not renting", () => {
+    expect(isRentedTenure("OWNED_OUTRIGHT")).toBe(false);
+    expect(isRentedTenure("OWNED_WITH_MORTGAGE")).toBe(false);
+  });
+
+  it("charges no housing cost to an owner even if a rent figure is present", () => {
+    expect(housingCostFor({ rent: 12000, tenureType: "OWNED_OUTRIGHT" })).toBe(0);
+    expect(housingCostFor({ rent: 12000, tenureType: "RENT_PRIVATELY" })).toBe(12000);
+  });
+
+  it("does not deduct rent from an owner's net income", () => {
+    // uc_housing_costs_element pays nothing on an owned tenure, so deducting
+    // rent here would take money off with no housing support to match it.
+    const owner = deductRent("uk", aggs, { rent: 12000, tenureType: "OWNED_OUTRIGHT" });
+    expect(owner).toEqual(aggs);
+    const renter = deductRent("uk", aggs, { rent: 12000, tenureType: "RENT_PRIVATELY" });
+    expect(renter.householdNetIncome).toBe(28000);
+  });
+
+  it("defaults to renting when no tenure is given", () => {
+    expect(isRentedTenure(undefined)).toBe(true);
+  });
+});
+
+describe("UK years", () => {
+  it("defaults to 2026-27", () => {
+    expect(COUNTRIES.uk.defaultYear).toBe("2026");
+  });
+
+  it("offers the three years after the default", () => {
+    for (const y of ["2027", "2028", "2029"]) {
+      expect(COUNTRIES.uk.availableYears).toContain(y);
+    }
+  });
+
+  it("leaves the US year range alone", () => {
+    expect(COUNTRIES.us.availableYears).not.toContain("2029");
   });
 });
