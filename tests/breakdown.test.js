@@ -22,28 +22,39 @@ function grid(marriedAt11, headAt1, spouseAt1) {
   return { married, head, spouse };
 }
 
+// Flatten the grouped result for assertions that do not care about grouping.
+function flat(groups) {
+  return groups.flatMap((g) => g.rows);
+}
+
+function find(groups, variable) {
+  return flat(groups).find((r) => r.variable === variable);
+}
+
 describe("buildCellBreakdown", () => {
   it("reports a benefit the couple keeps by living together as positive", () => {
     const programData = { universal_credit: grid(5000, 1000, 1000) };
-    const rows = buildCellBreakdown("uk", programData, 1, 1, COUNT);
-    const uc = rows.find((r) => r.variable === "universal_credit");
+    const groups = buildCellBreakdown("uk", programData, 1, 1, COUNT);
+    const uc = find(groups, "universal_credit");
     expect(uc).toBeDefined();
     expect(uc.delta).toBe(3000);
+    expect(groups.find((g) => g.key === "benefits")).toBeDefined();
   });
 
   it("reports a benefit lost by living together as negative", () => {
     const programData = { universal_credit: grid(1000, 3000, 3000) };
-    const rows = buildCellBreakdown("uk", programData, 1, 1, COUNT);
-    expect(rows.find((r) => r.variable === "universal_credit").delta).toBe(-5000);
+    const groups = buildCellBreakdown("uk", programData, 1, 1, COUNT);
+    expect(find(groups, "universal_credit").delta).toBe(-5000);
   });
 
   it("flips the sign on taxes, so positive always favours living together", () => {
     // Paying MORE tax together must read as a negative for the couple.
     const programData = { income_tax: grid(5000, 1000, 1000) };
-    const rows = buildCellBreakdown("uk", programData, 1, 1, COUNT);
-    const tax = rows.find((r) => r.variable === "income_tax");
+    const groups = buildCellBreakdown("uk", programData, 1, 1, COUNT);
+    const tax = find(groups, "income_tax");
     expect(tax).toBeDefined();
     expect(tax.delta).toBe(-3000);
+    expect(groups.find((g) => g.key === "taxes").rows).toContain(tax);
   });
 
   it("orders by size, not by program", () => {
@@ -51,7 +62,7 @@ describe("buildCellBreakdown", () => {
       universal_credit: grid(2000, 500, 500),
       child_benefit: grid(9000, 0, 0),
     };
-    const rows = buildCellBreakdown("uk", programData, 1, 1, COUNT);
+    const rows = flat(buildCellBreakdown("uk", programData, 1, 1, COUNT));
     expect(Math.abs(rows[0].delta)).toBeGreaterThanOrEqual(Math.abs(rows[1].delta));
     expect(rows[0].variable).toBe("child_benefit");
   });
@@ -61,18 +72,43 @@ describe("buildCellBreakdown", () => {
       universal_credit: grid(1000, 500, 500),
       child_benefit: grid(0, 0, 0),
     };
-    const rows = buildCellBreakdown("uk", programData, 1, 1, COUNT);
-    expect(rows.every((r) => Math.round(r.delta) !== 0)).toBe(true);
-    expect(rows.find((r) => r.variable === "child_benefit")).toBeUndefined();
+    const groups = buildCellBreakdown("uk", programData, 1, 1, COUNT);
+    expect(flat(groups).every((r) => Math.round(r.delta) !== 0)).toBe(true);
+    expect(find(groups, "child_benefit")).toBeUndefined();
   });
 
-  it("caps the list so the hover stays readable", () => {
+  it("separates benefits from taxes, so both are visible at once", () => {
+    // A flat top-N list could be filled entirely by benefits and hide the tax
+    // side, which is half the story for a couple moving across a threshold.
+    const programData = {
+      universal_credit: grid(9000, 100, 100),
+      child_benefit: grid(8000, 100, 100),
+      housing_benefit: grid(7000, 100, 100),
+      pension_credit: grid(6000, 100, 100),
+      income_tax: grid(500, 100, 100),
+      national_insurance: grid(400, 100, 100),
+    };
+    const groups = buildCellBreakdown("uk", programData, 1, 1, COUNT);
+    const keys = groups.map((g) => g.key);
+    expect(keys).toContain("benefits");
+    expect(keys).toContain("taxes");
+    expect(find(groups, "income_tax")).toBeDefined();
+    expect(find(groups, "national_insurance")).toBeDefined();
+  });
+
+  it("caps each group so the hover stays readable", () => {
     const programData = {};
-    for (const v of ["universal_credit", "child_benefit", "income_tax", "national_insurance", "pension_credit"]) {
+    for (const v of ["universal_credit", "child_benefit", "housing_benefit", "pension_credit", "income_support"]) {
       programData[v] = grid(9000, 100, 100);
     }
-    expect(buildCellBreakdown("uk", programData, 1, 1, COUNT).length).toBeLessThanOrEqual(4);
-    expect(buildCellBreakdown("uk", programData, 1, 1, COUNT, 2)).toHaveLength(2);
+    const capped = buildCellBreakdown("uk", programData, 1, 1, COUNT, 2);
+    expect(capped.find((g) => g.key === "benefits").rows).toHaveLength(2);
+  });
+
+  it("omits a group entirely when nothing in it moves", () => {
+    const programData = { universal_credit: grid(5000, 100, 100) };
+    const groups = buildCellBreakdown("uk", programData, 1, 1, COUNT);
+    expect(groups.map((g) => g.key)).toEqual(["benefits"]);
   });
 
   it("returns nothing rather than throwing on missing data", () => {
@@ -84,6 +120,6 @@ describe("buildCellBreakdown", () => {
     const programData = { universal_credit: grid(5000, 0, 0) };
     // The value sits at [1][1]; a different cell must not pick it up.
     expect(buildCellBreakdown("uk", programData, 0, 0, COUNT)).toEqual([]);
-    expect(buildCellBreakdown("uk", programData, 1, 1, COUNT)[0].delta).toBe(5000);
+    expect(flat(buildCellBreakdown("uk", programData, 1, 1, COUNT))[0].delta).toBe(5000);
   });
 });

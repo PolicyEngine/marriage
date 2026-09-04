@@ -469,24 +469,39 @@ export default function Heatmap({
                     margin: "5px 0 4px",
                   }}
                 />
-                <div style={{ opacity: 0.85, fontSize: "0.7rem", marginBottom: 2 }}>
-                  Driven by
+                <div style={{ opacity: 0.85, fontSize: "0.7rem", marginBottom: 3 }}>
+                  Driven by (positive favours living together)
                 </div>
-                {tooltip.breakdown.map((row) => (
-                  <div
-                    key={row.variable}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 14,
-                      fontSize: "0.75rem",
-                    }}
-                  >
-                    <span style={{ opacity: 0.85 }}>{row.label}</span>
-                    <strong>
-                      {row.delta >= 0 ? "+" : "\u2212"}
-                      {fmtDollar(Math.abs(row.delta), currencySymbol)}
-                    </strong>
+                {tooltip.breakdown.map((group) => (
+                  <div key={group.key} style={{ marginBottom: 3 }}>
+                    <div
+                      style={{
+                        opacity: 0.7,
+                        fontSize: "0.67rem",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        marginBottom: 1,
+                      }}
+                    >
+                      {group.title}
+                    </div>
+                    {group.rows.map((row) => (
+                      <div
+                        key={row.variable}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 14,
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        <span style={{ opacity: 0.85 }}>{row.label}</span>
+                        <strong>
+                          {row.delta >= 0 ? "+" : "\u2212"}
+                          {fmtDollar(Math.abs(row.delta), currencySymbol)}
+                        </strong>
+                      </div>
+                    ))}
                   </div>
                 ))}
               </>

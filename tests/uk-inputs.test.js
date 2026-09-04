@@ -12,6 +12,7 @@ import {
   UK_EXTRAS_DEFAULTS,
 } from "../lib/api.js";
 import { COUNTRIES, DEFAULT_COUNTRY } from "../lib/countries.js";
+import { formatYearLabel } from "../lib/utils.js";
 
 const Y = "2025";
 const kids = [{ age: 5 }, { age: 8 }];
@@ -219,5 +220,30 @@ describe("UK years", () => {
   it("leads with the UK and defaults to it", () => {
     expect(Object.keys(COUNTRIES)[0]).toBe("uk");
     expect(DEFAULT_COUNTRY).toBe("uk");
+  });
+});
+
+describe("year labels", () => {
+  it("renders both countries as a span, e.g. 2026-27", () => {
+    expect(formatYearLabel("2026")).toBe("2026-27");
+    expect(formatYearLabel("2027")).toBe("2027-28");
+    expect(formatYearLabel("2029")).toBe("2029-30");
+  });
+
+  it("pads the century rollover rather than showing a single digit", () => {
+    expect(formatYearLabel("2099")).toBe("2099-00");
+  });
+
+  it("passes through anything that is not a year", () => {
+    expect(formatYearLabel("")).toBe("");
+    expect(formatYearLabel("abc")).toBe("abc");
+  });
+
+  it("covers every year both countries offer", () => {
+    for (const c of [COUNTRIES.uk, COUNTRIES.us]) {
+      for (const y of c.availableYears) {
+        expect(formatYearLabel(y)).toMatch(/^\d{4}-\d{2}$/);
+      }
+    }
   });
 });

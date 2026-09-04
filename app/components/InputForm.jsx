@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 import { isRentedTenure } from "@/lib/api";
+import { formatYearLabel } from "@/lib/utils";
 
 function formatIncome(value) {
   const num = typeof value === "number" ? value : parseNumber(value);
@@ -316,7 +317,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
           <label>Year</label>
           <select value={year} onChange={(e) => setYear(e.target.value)}>
             {country.availableYears.map((y) => (
-              <option key={y} value={y}>{country.id === "uk" ? `${y}-${(Number(y) + 1).toString().slice(2)}` : y}</option>
+              <option key={y} value={y}>{formatYearLabel(y)}</option>
             ))}
           </select>
         </div>
