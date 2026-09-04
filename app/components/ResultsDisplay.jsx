@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, Suspense, lazy } from "react";
 import { computeTableData, formatCurrency, PROGRAM_DESCRIPTIONS } from "@/lib/utils";
-import { buildCellResults } from "@/lib/api";
+import { buildCellResults, buildCellBreakdown } from "@/lib/api";
 import MetricCards from "./MetricCards";
 
 const Heatmap = lazy(() => import("./Heatmap"));
@@ -327,6 +327,18 @@ export default function ResultsDisplay({
     (gc) => gc.tab === heatmapKey && gc.invertDelta,
   ) || false;
 
+  // Feeds the heatmap hover: which programs move at the cell under the cursor.
+  function getCellBreakdown(headIdx, spouseIdx) {
+    if (!heatmapData?.programData) return null;
+    return buildCellBreakdown(
+      countryId,
+      heatmapData.programData,
+      headIdx,
+      spouseIdx,
+      heatmapData.count,
+    );
+  }
+
   const heatmapProps = heatmapGrid ? {
     grid: heatmapGrid,
     headIncome,
@@ -336,6 +348,7 @@ export default function ResultsDisplay({
     count: heatmapData?.count || 33,
     markerDelta,
     onCellClick: heatmapData?.programData ? handleCellClick : undefined,
+    getBreakdown: heatmapData?.programData ? getCellBreakdown : undefined,
     selectedCell: cellSelection,
     label: heatmapLabel,
     headLine: combinedHeadLine,

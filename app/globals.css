@@ -653,12 +653,14 @@ body {
 /* Toggle switches */
 .sf-checks {
   display: flex;
-  gap: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
 }
 
 .sf-toggle {
   display: flex;
   align-items: center;
+  white-space: nowrap;
   gap: 0.4rem;
   font-size: 0.82rem;
   color: var(--color-text-muted);
@@ -1278,15 +1280,18 @@ body {
   position: absolute;
   left: 0;
   top: calc(100% + 8px);
-  width: 240px;
+  width: max-content;
+  max-width: min(260px, 70vw);
   padding: 0.5rem 0.65rem;
   background: var(--color-tooltip-bg);
   color: var(--color-tooltip-text);
   font-size: 0.82rem;
   font-weight: 400;
   line-height: 1.4;
+  border: 1px solid var(--color-tooltip-border, var(--color-border));
   border-radius: var(--radius-sm);
-  z-index: 100;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+  z-index: 200;
   pointer-events: none;
   white-space: normal;
 }
@@ -1297,7 +1302,7 @@ body {
   bottom: 100%;
   left: 16px;
   border: 6px solid transparent;
-  border-bottom-color: var(--color-tooltip-bg);
+  border-bottom-color: var(--color-tooltip-border, var(--color-border));
 }
 
 .program-name-tip:hover .tooltip { display: block; }
@@ -1969,4 +1974,13 @@ body footer .grid .flex-col.gap-3 {
 
 body footer .grid > div {
   gap: 1rem;
+}
+
+
+/* Tooltips inside the results card must not be clipped by their ancestors.
+   .table-scroll only scrolls below 768px; above that it is already visible. */
+.results,
+.result-card,
+.tab-panel {
+  overflow: visible;
 }

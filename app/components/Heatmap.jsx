@@ -22,6 +22,7 @@ export default function Heatmap({
   count = 33,
   markerDelta = null,
   onCellClick,
+  getBreakdown,
   selectedCell,
   label = "Net Change",
   headLine,
@@ -134,6 +135,8 @@ export default function Heatmap({
       data.notMarried = Math.round(headLine[hi] || 0) + Math.round(spouseLine[si] || 0);
       data.married = data.notMarried + rawDelta;
     }
+    // Which programs drive the gap here, not just how big it is.
+    if (getBreakdown) data.breakdown = getBreakdown(hi, si);
     setTooltip(data);
   }
 
@@ -414,7 +417,7 @@ export default function Heatmap({
               pointerEvents: "none",
               border: `1px solid ${isLightColor(tooltip.bgColor) ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.3)"}`,
               whiteSpace: "nowrap",
-              zIndex: 10,
+              zIndex: 30,
               fontFamily: FONT,
               boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
             }}
@@ -454,6 +457,40 @@ export default function Heatmap({
               {tooltip.delta >= 0 ? "Bonus" : "Penalty"}:{" "}
               {fmtDollar(Math.abs(tooltip.delta), currencySymbol)}
             </div>
+
+            {tooltip.breakdown && tooltip.breakdown.length > 0 && (
+              <>
+                <div
+                  style={{
+                    height: 1,
+                    background: isLightColor(tooltip.bgColor)
+                      ? "rgba(0,0,0,0.12)"
+                      : "rgba(255,255,255,0.25)",
+                    margin: "5px 0 4px",
+                  }}
+                />
+                <div style={{ opacity: 0.85, fontSize: "0.7rem", marginBottom: 2 }}>
+                  Driven by
+                </div>
+                {tooltip.breakdown.map((row) => (
+                  <div
+                    key={row.variable}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 14,
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    <span style={{ opacity: 0.85 }}>{row.label}</span>
+                    <strong>
+                      {row.delta >= 0 ? "+" : "\u2212"}
+                      {fmtDollar(Math.abs(row.delta), currencySymbol)}
+                    </strong>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
