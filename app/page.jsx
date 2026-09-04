@@ -1,5 +1,11 @@
 import MarriageApp from "./MarriageApp";
 
+// Next merges metadata shallowly: a nested object returned here REPLACES the
+// layout's object of the same name rather than merging into it. So openGraph
+// and twitter must repeat the image and card fields, or the country routes
+// lose the branded social preview the layout supplies.
+const OG_IMAGE = "https://policyengine.org/us/marriage/og-image.png";
+
 const COPY = {
   us: {
     title: "Marriage Tax Calculator — Marriage Penalty & Bonus | PolicyEngine",
@@ -31,11 +37,20 @@ export async function generateMetadata({ searchParams }) {
     description: copy.description,
     alternates: { canonical: copy.url },
     openGraph: {
+      type: "website",
       title: copy.title,
       description: copy.description,
       url: copy.url,
+      siteName: "PolicyEngine",
+      images: [{ url: OG_IMAGE }],
     },
-    twitter: { title: copy.title, description: copy.description },
+    twitter: {
+      card: "summary_large_image",
+      title: copy.title,
+      description: copy.description,
+      images: [OG_IMAGE],
+      site: "@ThePolicyEngine",
+    },
   };
 }
 

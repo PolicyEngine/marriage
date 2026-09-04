@@ -159,6 +159,34 @@ async function main() {
     }
   }
 
+  // The API's `adds` tree is the only source for these lists, and when a
+  // variable's `adds` is null upstream the discovery above silently yields an
+  // empty list. Writing that out replaces a working breakdown with nothing,
+  // and because this runs on `prebuild` it lands in a commit without anyone
+  // choosing it. That is exactly how the 18 US benefit entries were lost.
+  //
+  // Never let a regeneration empty a category that currently has entries.
+  const existing = fs.existsSync(OUT_PATH)
+    ? JSON.parse(fs.readFileSync(OUT_PATH, "utf8"))
+    : {};
+  const emptied = [];
+  for (const cat of ["benefits", "credits", "taxes", "healthcare", "stateCredits", "stateTaxes"]) {
+    const found = metadata[cat] || [];
+    const kept = existing[cat] || [];
+    if (found.length === 0 && kept.length > 0) {
+      metadata[cat] = kept;
+      emptied.push(cat);
+    }
+  }
+
+  if (emptied.length > 0) {
+    console.warn(
+      `\nWARNING: discovery returned nothing for ${emptied.join(", ")}. ` +
+      "Kept the existing entries rather than writing an empty list. " +
+      "Check whether the upstream `adds` tree changed shape.",
+    );
+  }
+
   fs.writeFileSync(OUT_PATH, JSON.stringify(metadata, null, 2) + "\n");
   console.log(`\nWrote ${OUT_PATH}`);
 }

@@ -60,3 +60,24 @@ describe("generateMetadata", () => {
     expect(m.alternates.canonical).toBe("https://policyengine.org/us/marriage");
   });
 });
+
+describe("social preview metadata", () => {
+  // Next merges metadata shallowly, so a nested object returned by the page
+  // replaces the layout's object of the same name. Returning openGraph without
+  // images silently drops the branded share image on both routes.
+  it("keeps an Open Graph image on both countries", async () => {
+    for (const country of ["uk", "us"]) {
+      const m = await generateMetadata({ searchParams: params({ country }) });
+      expect(m.openGraph.images, country).toBeDefined();
+      expect(m.openGraph.images.length, country).toBeGreaterThan(0);
+      expect(m.openGraph.siteName, country).toBe("PolicyEngine");
+    }
+  });
+
+  it("keeps the large Twitter card and site handle", async () => {
+    const m = await generateMetadata({ searchParams: params({ country: "uk" }) });
+    expect(m.twitter.card).toBe("summary_large_image");
+    expect(m.twitter.site).toBe("@ThePolicyEngine");
+    expect(m.twitter.images.length).toBeGreaterThan(0);
+  });
+});

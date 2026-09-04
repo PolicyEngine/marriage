@@ -1,5 +1,96 @@
 {
-  "benefits": [],
+  "benefits": [
+    {
+      "variable": "social_security",
+      "entity": "person",
+      "label": "Social Security"
+    },
+    {
+      "variable": "ssi",
+      "entity": "person",
+      "label": "SSI"
+    },
+    {
+      "variable": "snap",
+      "entity": "spm_unit",
+      "label": "SNAP allotment"
+    },
+    {
+      "variable": "wic",
+      "entity": "person",
+      "label": "WIC"
+    },
+    {
+      "variable": "free_school_meals",
+      "entity": "spm_unit",
+      "label": "free school meals"
+    },
+    {
+      "variable": "reduced_price_school_meals",
+      "entity": "spm_unit",
+      "label": "reduced price school meals"
+    },
+    {
+      "variable": "acp",
+      "entity": "spm_unit",
+      "label": "Affordable Connectivity Program"
+    },
+    {
+      "variable": "ebb",
+      "entity": "spm_unit",
+      "label": "Emergency Broadband Benefit amount"
+    },
+    {
+      "variable": "tanf",
+      "entity": "spm_unit",
+      "label": "TANF"
+    },
+    {
+      "variable": "high_efficiency_electric_home_rebate",
+      "entity": "tax_unit",
+      "label": "High efficiency electric home rebate"
+    },
+    {
+      "variable": "residential_efficiency_electrification_rebate",
+      "entity": "tax_unit",
+      "label": "Residential efficiency and electrification rebate"
+    },
+    {
+      "variable": "unemployment_compensation",
+      "entity": "person",
+      "label": "unemployment compensation"
+    },
+    {
+      "variable": "head_start",
+      "entity": "person",
+      "label": "Head Start"
+    },
+    {
+      "variable": "early_head_start",
+      "entity": "person",
+      "label": "Early Head Start"
+    },
+    {
+      "variable": "basic_income",
+      "entity": "tax_unit",
+      "label": "basic income"
+    },
+    {
+      "variable": "spm_unit_capped_housing_subsidy",
+      "entity": "spm_unit",
+      "label": "Housing subsidies"
+    },
+    {
+      "variable": "household_state_benefits",
+      "entity": "household",
+      "label": "Household state benefits"
+    },
+    {
+      "variable": "commodity_supplemental_food_program",
+      "entity": "person",
+      "label": "Commodity Supplemental Food Program"
+    }
+  ],
   "credits": [
     {
       "variable": "eitc",
