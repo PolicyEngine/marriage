@@ -5,7 +5,7 @@ import InputForm from "./components/InputForm";
 import ResultsDisplay from "./components/ResultsDisplay";
 import { getCategorizedPrograms, getHeatmapData } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { getCountry, COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
+import { getCountry, COUNTRIES, DEFAULT_COUNTRY, LEGACY_HASH_COUNTRY, DEFAULT_BRMA } from "@/lib/countries";
 
 const BASE_PATH =
   process.env.NEXT_PUBLIC_BASE_PATH === ""
@@ -16,7 +16,11 @@ const BASE_PATH =
 function encodeToHash(countryId, formData, isEmbedded) {
   const country = getCountry(countryId);
   const p = new URLSearchParams();
-  if (countryId !== DEFAULT_COUNTRY && !isEmbedded) p.set("country", countryId);
+  // Always record the country. Leaving it out to keep the default short made
+  // every hash depend on what the default happens to be, which is how existing
+  // US links broke when the default moved to the UK. Embedded pages take their
+  // country from the route, so they still omit it.
+  if (!isEmbedded) p.set("country", countryId);
   p.set("region", formData.regionCode || formData.stateCode);
   p.set("head", formData.headIncome);
   p.set("spouse", formData.spouseIncome);
@@ -45,6 +49,7 @@ function encodeToHash(countryId, formData, isEmbedded) {
   if (formData.tenureType && formData.tenureType !== "OWNED_OUTRIGHT") {
     p.set("tenure", formData.tenureType);
   }
+  if (formData.brma && formData.brma !== DEFAULT_BRMA) p.set("brma", formData.brma);
   if (formData.childcareCosts) p.set("cc", formData.childcareCosts);
   if (formData.savings) p.set("sav", formData.savings);
   if (formData.carerStatus?.head) p.set("hc", "1");
@@ -64,7 +69,10 @@ function decodeFromHash() {
     const p = new URLSearchParams(hash);
     const region = p.get("region") || p.get("state");
     if (!region || !p.has("head")) return null;
-    const countryId = p.get("country") || DEFAULT_COUNTRY;
+    // A hash with no country was written before the country was recorded, and
+    // every one of those is a US link: the UK route did not exist then. Reading
+    // them as the current default would send a US state to the UK model.
+    const countryId = p.get("country") || LEGACY_HASH_COUNTRY;
     const country = getCountry(countryId);
     const children = p.has("c")
       ? p
@@ -100,6 +108,7 @@ function decodeFromHash() {
       year: p.get("year") || country.defaultYear,
       rent: Number(p.get("rent") || 0),
       tenureType: p.get("tenure") || "OWNED_OUTRIGHT",
+      brma: p.get("brma") || DEFAULT_BRMA,
       childcareCosts: Number(p.get("cc") || 0),
       savings: Number(p.get("sav") || 0),
       carerStatus: { head: p.get("hc") === "1", spouse: p.get("sc") === "1" },
@@ -230,6 +239,7 @@ export default function MarriageApp({ initialCountry = null }) {
     const extras = {
       rent: data.rent || 0,
       tenureType: data.tenureType || "OWNED_OUTRIGHT",
+      brma: data.brma || DEFAULT_BRMA,
       savings: data.savings || 0,
       childcareCosts: data.childcareCosts || 0,
       carerStatus: data.carerStatus || {},

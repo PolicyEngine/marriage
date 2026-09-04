@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 
 import { isRentedTenure } from "@/lib/api";
 import { formatYearLabel } from "@/lib/utils";
+import { UK_BRMAS, DEFAULT_BRMA } from "@/lib/countries";
 
 function formatIncome(value) {
   const num = typeof value === "number" ? value : parseNumber(value);
@@ -56,6 +57,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   // or a means-test component; see lib/api.js createUKSituation.
   const [rent, setRent] = useState(formatIncome(iv.rent != null ? iv.rent : 0));
   const [tenureType, setTenureType] = useState(iv.tenureType || "OWNED_OUTRIGHT");
+  const [brma, setBrma] = useState(iv.brma || DEFAULT_BRMA);
   const [childcareCosts, setChildcareCosts] = useState(
     formatIncome(iv.childcareCosts != null ? iv.childcareCosts : 0),
   );
@@ -169,6 +171,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       if (!country.hasHousing) {
         setRent(formatIncome(0));
         setTenureType("OWNED_OUTRIGHT");
+        setBrma(DEFAULT_BRMA);
       }
       if (!country.hasChildcare) setChildcareCosts(formatIncome(0));
       if (!country.hasCapital) setSavings(formatIncome(0));
@@ -200,7 +203,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     if (onInputChange) onInputChange();
   }, [regionCode, headIncome, spouseIncome, headAge, spouseAge,
     headDisabled, spouseDisabled, headESI, spouseESI, year, childrenKey,
-    rent, tenureType, childcareCosts, savings,
+    rent, tenureType, brma, childcareCosts, savings,
     headCarer, spouseCarer, headSelfEmp, spouseSelfEmp,
     headPension, spousePension]);
 
@@ -219,6 +222,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       year,
       rent: rentsApply ? parseNumber(rent) : 0,
       tenureType,
+      brma,
       childcareCosts: parseNumber(childcareCosts),
       savings: parseNumber(savings),
       carerStatus: { head: headCarer, spouse: spouseCarer },
@@ -515,6 +519,24 @@ export default function InputForm({ country, countries, countryId, onCountryChan
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {country.hasHousing && tenureType === "RENT_PRIVATELY" && (
+              <div className="sf-field">
+                <label className="sf-label-tip">
+                  Rental market area
+                  <span className="sf-label-tooltip">
+                    Private rent is capped at the Local Housing Allowance rate
+                    for the local Broad Rental Market Area, which varies widely.
+                    Social rent is not capped, so this does not apply there.
+                  </span>
+                </label>
+                <select value={brma} onChange={(e) => setBrma(e.target.value)}>
+                  {UK_BRMAS.map((a) => (
+                    <option key={a.code} value={a.code}>{a.name}</option>
+                  ))}
+                </select>
               </div>
             )}
 

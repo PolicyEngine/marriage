@@ -241,6 +241,7 @@ export default function ResultsDisplay({
       cellSelection.spouseIdx,
       heatmapData.count || 33,
       heatmapData.stateCreditEntries,
+      heatmapData.extras || {},
     );
   }, [cellSelection, heatmapData, countryId]);
 
@@ -328,6 +329,15 @@ export default function ResultsDisplay({
   ) || false;
 
   // Feeds the heatmap hover: which programs move at the cell under the cursor.
+  // On a single-category heatmap the number in the hover is that category's
+  // delta, so the drivers listed under it must come from the same category.
+  // The summary heatmap is net income, where every category contributes.
+  const BREAKDOWN_CATEGORY = {
+    taxes: "taxes",
+    benefits: "benefits",
+    credits: "credits",
+  };
+
   function getCellBreakdown(headIdx, spouseIdx) {
     if (!heatmapData?.programData) return null;
     return buildCellBreakdown(
@@ -336,6 +346,8 @@ export default function ResultsDisplay({
       headIdx,
       spouseIdx,
       heatmapData.count,
+      6,
+      BREAKDOWN_CATEGORY[activeTab] || null,
     );
   }
 
