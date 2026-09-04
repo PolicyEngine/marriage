@@ -35,7 +35,7 @@ describe("country resolution from searchParams", () => {
     expect(el.props.initialCountry).toBe("uk");
   });
 
-  it("falls back to null with no country", async () => {
+  it("falls back to null with no country, letting the app apply its default", async () => {
     const el = await Page({ searchParams: params({}) });
     expect(el.props.initialCountry).toBeNull();
   });
@@ -54,8 +54,14 @@ describe("generateMetadata", () => {
     expect(m.alternates.canonical).toBe("https://policyengine.org/uk/marriage");
   });
 
-  it("keeps US copy and canonical by default", async () => {
+  it("uses UK copy by default, since the UK is the default country", async () => {
     const m = await generateMetadata({ searchParams: params({}) });
+    expect(m.description).toMatch(/UK/);
+    expect(m.alternates.canonical).toBe("https://policyengine.org/uk/marriage");
+  });
+
+  it("still uses US copy on an explicit US route", async () => {
+    const m = await generateMetadata({ searchParams: params({ country: "us" }) });
     expect(m.description).toMatch(/US state/);
     expect(m.alternates.canonical).toBe("https://policyengine.org/us/marriage");
   });

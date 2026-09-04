@@ -5,7 +5,7 @@ import InputForm from "./components/InputForm";
 import ResultsDisplay from "./components/ResultsDisplay";
 import { getCategorizedPrograms, getHeatmapData } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { getCountry, COUNTRIES } from "@/lib/countries";
+import { getCountry, COUNTRIES, DEFAULT_COUNTRY } from "@/lib/countries";
 
 const BASE_PATH =
   process.env.NEXT_PUBLIC_BASE_PATH === ""
@@ -16,7 +16,7 @@ const BASE_PATH =
 function encodeToHash(countryId, formData, isEmbedded) {
   const country = getCountry(countryId);
   const p = new URLSearchParams();
-  if (countryId !== "us" && !isEmbedded) p.set("country", countryId);
+  if (countryId !== DEFAULT_COUNTRY && !isEmbedded) p.set("country", countryId);
   p.set("region", formData.regionCode || formData.stateCode);
   p.set("head", formData.headIncome);
   p.set("spouse", formData.spouseIncome);
@@ -64,7 +64,7 @@ function decodeFromHash() {
     const p = new URLSearchParams(hash);
     const region = p.get("region") || p.get("state");
     if (!region || !p.has("head")) return null;
-    const countryId = p.get("country") || "us";
+    const countryId = p.get("country") || DEFAULT_COUNTRY;
     const country = getCountry(countryId);
     const children = p.has("c")
       ? p
@@ -124,7 +124,7 @@ export default function MarriageApp({ initialCountry = null }) {
   // proxies and the browser URL (hence window.location.search) stays at the
   // host path. Keeping it in useState's initial value makes SSR and the first
   // client render agree, so /uk/marriage hydrates straight into UK.
-  const [countryId, setCountryId] = useState(initialCountry || "us");
+  const [countryId, setCountryId] = useState(initialCountry || DEFAULT_COUNTRY);
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [mounted, setMounted] = useState(false);
   const country = getCountry(countryId);
@@ -143,11 +143,11 @@ export default function MarriageApp({ initialCountry = null }) {
 
   // Resolve browser-only state after mount.
   // initialCountry already seeded countryId (for the rewrite path), so it
-  // stays in the chain here as the final fallback before "us".
+  // stays in the chain here as the final fallback before the default country.
   useEffect(() => {
     decoded.current = decodeFromHash();
     const hashCountry = new URLSearchParams(window.location.hash.slice(1)).get("country");
-    const resolvedCountry = decoded.current?.countryId || hashCountry || initialCountry || "us";
+    const resolvedCountry = decoded.current?.countryId || hashCountry || initialCountry || DEFAULT_COUNTRY;
     setCountryId(resolvedCountry);
     setIsEmbedded(window.self !== window.top);
     setMounted(true);

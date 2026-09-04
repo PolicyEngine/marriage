@@ -1829,9 +1829,17 @@ body {
   border-top: 1px solid var(--color-border-light);
 }
 
-.sf-more-body > .sf-children {
+.sf-more-body .sf-children {
   border-top: none;
   padding-top: 0;
+  border-left: 2px solid var(--color-border);
+  padding-left: 0.6rem;
+}
+
+.sf-more-body .sf-children-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .sf-more-people {
@@ -1850,15 +1858,66 @@ body {
 .sf-extra--partner { border-left-color: var(--accent-partner-text, var(--color-border)); }
 
 .sf-extra-title {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--color-text-muted);
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+/* Inside the panel the uppercase, letter-spaced labels are too wide for a
+   two-column row and wrap, which knocks the inputs out of alignment. Drop the
+   uppercasing and reserve a fixed label height so both columns line up whether
+   the label runs to one line or two. */
+.sf-more-body .sf-field label {
+  font-size: 0.75rem;
+  text-transform: none;
+  letter-spacing: 0;
+  min-height: 1.15rem;
+  display: flex;
+  align-items: flex-end;
+}
+
+.sf-more-body .sf-row {
+  align-items: flex-end;
+}
+
+.sf-more-body .sf-row > .sf-field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sf-more-body .sf-row > .sf-age {
+  flex: 0 0 62px;
+}
+
+.sf-more-body .sf-row > .sf-money {
+  flex: 0 0 100px;
+}
+
+/* Grouped household inputs, headed the same way as a person block */
+.sf-group {
+  border-left: 2px solid var(--color-border);
+  padding-left: 0.6rem;
+}
+
+.sf-group-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.sf-more-body .sf-checks {
+  margin-top: 0.5rem;
 }
 
 /* Narrow money column that pairs with a wider select on the same row */
 .sf-money {
-  width: 108px;
+  width: 100px;
   flex-shrink: 0;
 }
 

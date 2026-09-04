@@ -11,7 +11,7 @@
     "metadata": "node scripts/update-metadata.cjs",
     "prebuild": "node scripts/update-metadata.cjs",
     "test": "vitest run",
-    "test:ci": "vitest run tests/api.test.js tests/design.test.jsx tests/heatmap.test.js tests/page-country.test.jsx tests/metadata-integrity.test.js tests/uk-inputs.test.js",
+    "test:ci": "vitest run tests/api.test.js tests/design.test.jsx tests/heatmap.test.js tests/page-country.test.jsx tests/metadata-integrity.test.js tests/uk-inputs.test.js tests/uk-live.test.js",
     "test:watch": "vitest"
   },
   "dependencies": {

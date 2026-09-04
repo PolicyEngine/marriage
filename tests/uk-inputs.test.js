@@ -11,7 +11,7 @@ import {
   createSituation, splitExtras, deductRent, housingCostFor, isRentedTenure,
   UK_EXTRAS_DEFAULTS,
 } from "../lib/api.js";
-import { COUNTRIES } from "../lib/countries.js";
+import { COUNTRIES, DEFAULT_COUNTRY } from "../lib/countries.js";
 
 const Y = "2025";
 const kids = [{ age: 5 }, { age: 8 }];
@@ -204,5 +204,18 @@ describe("UK years", () => {
 
   it("leaves the US year range alone", () => {
     expect(COUNTRIES.us.availableYears).not.toContain("2029");
+  });
+
+  it("drops the past years on both countries", () => {
+    for (const c of [COUNTRIES.uk, COUNTRIES.us]) {
+      expect(c.availableYears).not.toContain("2024");
+      expect(c.availableYears).not.toContain("2025");
+      expect(c.availableYears[0]).toBe("2026");
+    }
+  });
+
+  it("leads with the UK and defaults to it", () => {
+    expect(Object.keys(COUNTRIES)[0]).toBe("uk");
+    expect(DEFAULT_COUNTRY).toBe("uk");
   });
 });
