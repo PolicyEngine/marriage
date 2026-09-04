@@ -1,35 +1,133 @@
 {
   "benefits": [
-    { "variable": "universal_credit", "entity": "benunit", "label": "Universal Credit" },
-    { "variable": "child_benefit", "entity": "benunit", "label": "Child Benefit" },
-    { "variable": "housing_benefit", "entity": "benunit", "label": "Housing Benefit" },
-    { "variable": "pension_credit", "entity": "benunit", "label": "Pension Credit" },
-    { "variable": "working_tax_credit", "entity": "benunit", "label": "Working Tax Credit" },
-    { "variable": "child_tax_credit", "entity": "benunit", "label": "Child Tax Credit" },
-    { "variable": "income_support", "entity": "benunit", "label": "Income Support" },
-    { "variable": "jsa_income", "entity": "benunit", "label": "Income-based JSA" },
-    { "variable": "esa_income", "entity": "benunit", "label": "Income-related ESA" },
-    { "variable": "state_pension", "entity": "person", "label": "State Pension" },
-    { "variable": "carers_allowance", "entity": "person", "label": "Carer's Allowance" },
-    { "variable": "pip", "entity": "person", "label": "Personal Independence Payment" },
-    { "variable": "dla", "entity": "person", "label": "Disability Living Allowance" },
-    { "variable": "attendance_allowance", "entity": "person", "label": "Attendance Allowance" },
-    { "variable": "maternity_allowance", "entity": "person", "label": "Maternity Allowance" },
-    { "variable": "winter_fuel_allowance", "entity": "household", "label": "Winter Fuel Allowance" }
+    {
+      "variable": "universal_credit",
+      "entity": "benunit",
+      "label": "Universal Credit"
+    },
+    {
+      "variable": "child_benefit",
+      "entity": "benunit",
+      "label": "Child Benefit"
+    },
+    {
+      "variable": "housing_benefit",
+      "entity": "benunit",
+      "label": "Housing Benefit"
+    },
+    {
+      "variable": "pension_credit",
+      "entity": "benunit",
+      "label": "Pension Credit"
+    },
+    {
+      "variable": "working_tax_credit",
+      "entity": "benunit",
+      "label": "Working Tax Credit"
+    },
+    {
+      "variable": "child_tax_credit",
+      "entity": "benunit",
+      "label": "Child Tax Credit"
+    },
+    {
+      "variable": "income_support",
+      "entity": "benunit",
+      "label": "Income Support"
+    },
+    {
+      "variable": "jsa_income",
+      "entity": "benunit",
+      "label": "Income-based JSA"
+    },
+    {
+      "variable": "esa_income",
+      "entity": "benunit",
+      "label": "Income-related ESA"
+    },
+    {
+      "variable": "state_pension",
+      "entity": "person",
+      "label": "State Pension"
+    },
+    {
+      "variable": "carers_allowance",
+      "entity": "person",
+      "label": "Carer's Allowance"
+    },
+    {
+      "variable": "pip",
+      "entity": "person",
+      "label": "Personal Independence Payment"
+    },
+    {
+      "variable": "dla",
+      "entity": "person",
+      "label": "Disability Living Allowance"
+    },
+    {
+      "variable": "attendance_allowance",
+      "entity": "person",
+      "label": "Attendance Allowance"
+    },
+    {
+      "variable": "maternity_allowance",
+      "entity": "person",
+      "label": "Maternity Allowance"
+    },
+    {
+      "variable": "winter_fuel_allowance",
+      "entity": "household",
+      "label": "Winter Fuel Allowance"
+    }
   ],
   "credits": [],
   "taxes": [
-    { "variable": "income_tax", "entity": "person", "label": "Income Tax" },
-    { "variable": "national_insurance", "entity": "person", "label": "National Insurance" },
-    { "variable": "council_tax", "entity": "household", "label": "Council Tax" }
+    {
+      "variable": "income_tax",
+      "entity": "person",
+      "label": "Income Tax"
+    },
+    {
+      "variable": "national_insurance",
+      "entity": "person",
+      "label": "National Insurance"
+    },
+    {
+      "variable": "council_tax",
+      "entity": "household",
+      "label": "Council Tax"
+    },
+    {
+      "variable": "tv_licence",
+      "entity": "household",
+      "label": "TV Licence"
+    },
+    {
+      "variable": "expected_sdlt",
+      "entity": "household",
+      "label": "Stamp Duty"
+    }
   ],
   "healthcare": [],
   "stateCredits": [],
   "stateCreditsByState": {},
   "stateTaxes": [],
   "aggregates": [
-    { "variable": "household_net_income", "entity": "household", "label": "Net income" },
-    { "variable": "household_benefits", "entity": "household", "label": "Benefits" },
-    { "variable": "household_tax", "entity": "household", "label": "Tax" }
+    {
+      "variable": "household_net_income",
+      "entity": "household",
+      "label": "Net income"
+    },
+    {
+      "variable": "household_benefits",
+      "entity": "household",
+      "label": "Benefits"
+    },
+    {
+      "variable": "household_tax",
+      "entity": "household",
+      "label": "Tax"
+    }
   ]
 }
