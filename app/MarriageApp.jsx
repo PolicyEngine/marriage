@@ -42,7 +42,7 @@ function encodeToHash(countryId, formData, isEmbedded) {
   // UK Universal Credit inputs. Only written when non-default so existing
   // shared links keep their current shape.
   if (formData.rent) p.set("rent", formData.rent);
-  if (formData.tenureType && formData.tenureType !== "RENT_PRIVATELY") {
+  if (formData.tenureType && formData.tenureType !== "OWNED_OUTRIGHT") {
     p.set("tenure", formData.tenureType);
   }
   if (formData.childcareCosts) p.set("cc", formData.childcareCosts);
@@ -99,7 +99,7 @@ function decodeFromHash() {
       children,
       year: p.get("year") || country.defaultYear,
       rent: Number(p.get("rent") || 0),
-      tenureType: p.get("tenure") || "RENT_PRIVATELY",
+      tenureType: p.get("tenure") || "OWNED_OUTRIGHT",
       childcareCosts: Number(p.get("cc") || 0),
       savings: Number(p.get("sav") || 0),
       carerStatus: { head: p.get("hc") === "1", spouse: p.get("sc") === "1" },
@@ -229,7 +229,7 @@ export default function MarriageApp({ initialCountry = null }) {
     // UK-only inputs, ignored by the US situation builder.
     const extras = {
       rent: data.rent || 0,
-      tenureType: data.tenureType || "RENT_PRIVATELY",
+      tenureType: data.tenureType || "OWNED_OUTRIGHT",
       savings: data.savings || 0,
       childcareCosts: data.childcareCosts || 0,
       carerStatus: data.carerStatus || {},

@@ -54,7 +54,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   // UK Universal Credit inputs. Each maps to an element of uc_maximum_amount
   // or a means-test component; see lib/api.js createUKSituation.
   const [rent, setRent] = useState(formatIncome(iv.rent != null ? iv.rent : 0));
-  const [tenureType, setTenureType] = useState(iv.tenureType || "RENT_PRIVATELY");
+  const [tenureType, setTenureType] = useState(iv.tenureType || "OWNED_OUTRIGHT");
   const [childcareCosts, setChildcareCosts] = useState(
     formatIncome(iv.childcareCosts != null ? iv.childcareCosts : 0),
   );
@@ -167,7 +167,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       }
       if (!country.hasHousing) {
         setRent(formatIncome(0));
-        setTenureType("RENT_PRIVATELY");
+        setTenureType("OWNED_OUTRIGHT");
       }
       if (!country.hasChildcare) setChildcareCosts(formatIncome(0));
       if (!country.hasCapital) setSavings(formatIncome(0));
@@ -345,6 +345,23 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         currencySymbol={country.currencySymbol}
       />
 
+      <PersonSection
+        title="Your partner"
+        accent="partner"
+        income={spouseIncome}
+        onIncomeChange={(v) => handleIncomeChange(setSpouseIncome, v)}
+        onIncomeBlur={() => handleIncomeBlur(setSpouseIncome, spouseIncome, "spouseIncome")}
+        incomeError={errors.spouseIncome}
+        age={spouseAge}
+        onAgeChange={setSpouseAge}
+        onAgeBlur={() => handleAgeBlur(setSpouseAge, spouseAge, "spouseAge")}
+        ageError={errors.spouseAge}
+        showDisability={false}
+        showPregnancy={false}
+        showESI={false}
+        currencySymbol={country.currencySymbol}
+      />
+
       {hasExtraInputs && (
         <details className="sf-more">
           <summary className="sf-more-summary">
@@ -382,15 +399,6 @@ export default function InputForm({ country, countries, countryId, onCountryChan
               title="Your partner"
               accent="partner"
               currencySymbol={country.currencySymbol}
-              showIncome
-              income={spouseIncome}
-              onIncomeChange={(v) => handleIncomeChange(setSpouseIncome, v)}
-              onIncomeBlur={() => handleIncomeBlur(setSpouseIncome, spouseIncome, "spouseIncome")}
-              incomeError={errors.spouseIncome}
-              age={spouseAge}
-              onAgeChange={setSpouseAge}
-              onAgeBlur={() => handleAgeBlur(setSpouseAge, spouseAge, "spouseAge")}
-              ageError={errors.spouseAge}
               selfEmployment={spouseSelfEmp}
               onSelfEmploymentChange={(v) => handleIncomeChange(setSpouseSelfEmp, v)}
               onSelfEmploymentBlur={() => handleIncomeBlur(setSpouseSelfEmp, spouseSelfEmp, "spouseSelfEmp")}
@@ -475,11 +483,11 @@ export default function InputForm({ country, countries, countryId, onCountryChan
                       </span>
                     </label>
                     <select value={tenureType} onChange={(e) => setTenureType(e.target.value)}>
+                      <option value="OWNED_OUTRIGHT">Owned outright</option>
+                      <option value="OWNED_WITH_MORTGAGE">Owned with a mortgage</option>
                       <option value="RENT_PRIVATELY">Rented privately</option>
                       <option value="RENT_FROM_COUNCIL">Rented from council</option>
                       <option value="RENT_FROM_HA">Rented from housing association</option>
-                      <option value="OWNED_WITH_MORTGAGE">Owned with a mortgage</option>
-                      <option value="OWNED_OUTRIGHT">Owned outright</option>
                     </select>
                   </div>
                   <div className="sf-field sf-money">
@@ -699,7 +707,7 @@ function ExtraAdultFields({
               />
               <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
               Disabled
-              <span className="sf-label-tooltip">
+              <span className="sf-toggle-tooltip">
                 Adds the Universal Credit limited capability for work element,
                 and makes a couple without children eligible for a work
                 allowance, so earnings taper more slowly.
@@ -716,7 +724,7 @@ function ExtraAdultFields({
               />
               <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
               Carer
-              <span className="sf-label-tooltip">
+              <span className="sf-toggle-tooltip">
                 Caring for a disabled person at least 35 hours a week adds the
                 carer element. It is separate from being disabled yourself, and
                 it follows the individual, so it can survive a separation.

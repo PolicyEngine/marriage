@@ -118,18 +118,18 @@ describe("splitExtras: allocation when the couple separates", () => {
 describe("deductRent: net income after housing costs", () => {
   const aggs = { householdNetIncome: 40000, householdNetIncomeWithHealth: 40000 };
 
-  it("subtracts rent for the UK", () => {
-    const r = deductRent("uk", aggs, { rent: 12000 });
+  it("subtracts rent for a UK renter", () => {
+    const r = deductRent("uk", aggs, { rent: 12000, tenureType: "RENT_PRIVATELY" });
     expect(r.householdNetIncome).toBe(28000);
     expect(r.rentDeducted).toBe(12000);
   });
 
   it("is a no-op at zero rent, so existing UK results do not move", () => {
-    expect(deductRent("uk", aggs, { rent: 0 })).toEqual(aggs);
+    expect(deductRent("uk", aggs, { rent: 0, tenureType: "RENT_PRIVATELY" })).toEqual(aggs);
   });
 
   it("never applies to the US, which has no rent input", () => {
-    expect(deductRent("us", aggs, { rent: 12000 })).toEqual(aggs);
+    expect(deductRent("us", aggs, { rent: 12000, tenureType: "RENT_PRIVATELY" })).toEqual(aggs);
     expect(COUNTRIES.us.deductRentFromNetIncome).toBeUndefined();
   });
 });
@@ -186,8 +186,10 @@ describe("tenure: owners have no rent to deduct", () => {
     expect(renter.householdNetIncome).toBe(28000);
   });
 
-  it("defaults to renting when no tenure is given", () => {
-    expect(isRentedTenure(undefined)).toBe(true);
+  it("defaults to owning outright, so no rent is deducted by default", () => {
+    expect(UK_EXTRAS_DEFAULTS.tenureType).toBe("OWNED_OUTRIGHT");
+    expect(isRentedTenure(undefined)).toBe(false);
+    expect(housingCostFor({ rent: 12000 })).toBe(0);
   });
 });
 

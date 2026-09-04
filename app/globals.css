@@ -108,8 +108,9 @@ body {
   --color-negative-bg: rgba(220, 38, 38, 0.06);
 
   /* Tooltip */
-  --color-tooltip-bg: #0F172A;
-  --color-tooltip-text: #F9FAFB;
+  --color-tooltip-bg: #FFFFFF;
+  --color-tooltip-text: #1F2937;
+  --color-tooltip-border: #CBD5E1;
   --color-tooltip-dotted: #94A3B8;
 
   /* Utility buttons */
@@ -499,10 +500,11 @@ body {
   letter-spacing: 0.04em;
 }
 
+/* No dotted underline: it read as a stray rule under the label. The help
+   cursor and the tooltip on hover are the affordance. */
 .sf-label-tip {
   position: relative;
   cursor: help;
-  border-bottom: 1px dotted var(--color-tooltip-dotted);
   display: inline-block;
 }
 
@@ -511,15 +513,18 @@ body {
   position: absolute;
   left: 0;
   top: calc(100% + 6px);
-  width: 200px;
+  width: max-content;
+  max-width: min(240px, 78vw);
   padding: 0.45rem 0.55rem;
   background: var(--color-tooltip-bg);
   color: var(--color-tooltip-text);
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.4;
+  border: 1px solid var(--color-tooltip-border, var(--color-border));
   border-radius: var(--radius-sm);
-  z-index: 100;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+  z-index: 200;
   pointer-events: none;
   white-space: normal;
 }
@@ -705,23 +710,25 @@ body {
 .sf-toggle-tip {
   position: relative;
   cursor: help;
-  border-bottom: 1px dotted var(--color-tooltip-dotted);
 }
 
 .sf-toggle-tooltip {
   display: none;
   position: absolute;
-  right: 0;
+  left: 0;
   top: calc(100% + 6px);
-  width: 200px;
+  width: max-content;
+  max-width: min(240px, 78vw);
   padding: 0.45rem 0.55rem;
   background: var(--color-tooltip-bg);
   color: var(--color-tooltip-text);
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.4;
+  border: 1px solid var(--color-tooltip-border, var(--color-border));
   border-radius: var(--radius-sm);
-  z-index: 100;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+  z-index: 200;
   pointer-events: none;
   white-space: normal;
 }
@@ -1772,7 +1779,11 @@ body {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
-  overflow: hidden;
+  /* Not overflow:hidden — it clipped the hover tooltips inside the panel. */
+}
+
+.sf-more > .sf-more-summary {
+  border-radius: var(--radius-md);
 }
 
 .sf-more-summary {
@@ -1824,23 +1835,17 @@ body {
 .sf-more-body {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
-  padding: 0.15rem 0.75rem 0.8rem;
+  gap: 0.85rem;
+  padding: 0.7rem;
   border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg);
 }
 
 .sf-more-body .sf-children {
   border-top: none;
-  padding-top: 0;
-  border-left: 2px solid var(--color-border);
-  padding-left: 0.6rem;
 }
 
-.sf-more-body .sf-children-label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
+
 
 .sf-more-people {
   display: flex;
@@ -1848,22 +1853,40 @@ body {
   gap: 0.6rem;
 }
 
-/* Per-adult optional fields, colour-matched to the person sections above */
-.sf-extra {
-  border-left: 2px solid var(--color-border);
-  padding-left: 0.6rem;
+/* Each group in the panel is a card. A hairline rule was not enough
+   separation: the blocks ran together into one undifferentiated column. */
+.sf-extra,
+.sf-group,
+.sf-more-body .sf-children {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-left-width: 3px;
+  border-left-color: var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.7rem 0.7rem;
 }
 
 .sf-extra--you { border-left-color: var(--accent-you-text, var(--color-border)); }
 .sf-extra--partner { border-left-color: var(--accent-partner-text, var(--color-border)); }
 
-.sf-extra-title {
-  font-size: 0.72rem;
+.sf-extra-title,
+.sf-group-title,
+.sf-more-body .sf-children-label {
+  display: block;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted);
-  margin-bottom: 0.4rem;
+  letter-spacing: 0.06em;
+  color: var(--color-heading);
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+/* Space between the stacked field rows inside a card */
+.sf-extra .sf-row + .sf-row,
+.sf-group .sf-row + .sf-row {
+  margin-top: 0.55rem;
 }
 
 /* Inside the panel the uppercase, letter-spaced labels are too wide for a
@@ -1896,20 +1919,7 @@ body {
   flex: 0 0 100px;
 }
 
-/* Grouped household inputs, headed the same way as a person block */
-.sf-group {
-  border-left: 2px solid var(--color-border);
-  padding-left: 0.6rem;
-}
 
-.sf-group-title {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted);
-  margin-bottom: 0.4rem;
-}
 
 .sf-more-body .sf-checks {
   margin-top: 0.5rem;
