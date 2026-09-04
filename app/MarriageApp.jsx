@@ -39,6 +39,21 @@ function encodeToHash(countryId, formData, isEmbedded) {
   if (formData.year && formData.year !== country.defaultYear) {
     p.set("year", formData.year);
   }
+  // UK Universal Credit inputs. Only written when non-default so existing
+  // shared links keep their current shape.
+  if (formData.hasPartner === false) p.set("single", "1");
+  if (formData.rent) p.set("rent", formData.rent);
+  if (formData.tenureType && formData.tenureType !== "RENT_PRIVATELY") {
+    p.set("tenure", formData.tenureType);
+  }
+  if (formData.childcareCosts) p.set("cc", formData.childcareCosts);
+  if (formData.savings) p.set("sav", formData.savings);
+  if (formData.carerStatus?.head) p.set("hc", "1");
+  if (formData.carerStatus?.spouse) p.set("sc", "1");
+  if (formData.selfEmploymentIncome?.head) p.set("hse", formData.selfEmploymentIncome.head);
+  if (formData.selfEmploymentIncome?.spouse) p.set("sse", formData.selfEmploymentIncome.spouse);
+  if (formData.pensionIncome?.head) p.set("hpi", formData.pensionIncome.head);
+  if (formData.pensionIncome?.spouse) p.set("spi", formData.pensionIncome.spouse);
   return p.toString();
 }
 
@@ -84,6 +99,20 @@ function decodeFromHash() {
       },
       children,
       year: p.get("year") || country.defaultYear,
+      hasPartner: p.get("single") !== "1",
+      rent: Number(p.get("rent") || 0),
+      tenureType: p.get("tenure") || "RENT_PRIVATELY",
+      childcareCosts: Number(p.get("cc") || 0),
+      savings: Number(p.get("sav") || 0),
+      carerStatus: { head: p.get("hc") === "1", spouse: p.get("sc") === "1" },
+      selfEmploymentIncome: {
+        head: Number(p.get("hse") || 0),
+        spouse: Number(p.get("sse") || 0),
+      },
+      pensionIncome: {
+        head: Number(p.get("hpi") || 0),
+        spouse: Number(p.get("spi") || 0),
+      },
     };
   } catch {
     return null;
@@ -199,6 +228,16 @@ export default function MarriageApp({ initialCountry = null }) {
       headIncome, spouseIncome, headAge, spouseAge,
       children, disabilityStatus, pregnancyStatus, esiStatus, year,
     } = data;
+    // UK-only inputs, ignored by the US situation builder.
+    const extras = {
+      rent: data.rent || 0,
+      tenureType: data.tenureType || "RENT_PRIVATELY",
+      savings: data.savings || 0,
+      childcareCosts: data.childcareCosts || 0,
+      carerStatus: data.carerStatus || {},
+      selfEmploymentIncome: data.selfEmploymentIncome || {},
+      pensionIncome: data.pensionIncome || {},
+    };
     const regionCode = data.regionCode || data.stateCode;
     const effectiveRegion = countryId === "us" && regionCode === "NYC" ? "NY" : regionCode;
     const inNYC = countryId === "us" && regionCode === "NYC";
@@ -212,7 +251,7 @@ export default function MarriageApp({ initialCountry = null }) {
       const result = await getCategorizedPrograms(
         countryId, effectiveRegion, headIncome, spouseIncome, children,
         disabilityStatus, year, pregnancyStatus, headAge, spouseAge,
-        esiStatus, inNYC,
+        esiStatus, inNYC, extras,
       );
       setResults(result);
       setLoading(false);
@@ -222,7 +261,7 @@ export default function MarriageApp({ initialCountry = null }) {
         const heatmap = await getHeatmapData(
           countryId, effectiveRegion, children, disabilityStatus, year,
           pregnancyStatus, headIncome, spouseIncome, headAge, spouseAge,
-          esiStatus, inNYC,
+          esiStatus, inNYC, extras,
         );
         setHeatmapData(heatmap);
       } catch (e) {

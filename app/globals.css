@@ -1710,3 +1710,55 @@ body {
 .app-footer a:hover {
   text-decoration: underline;
 }
+
+/* ---------- UK Universal Credit household inputs ---------- */
+
+.sf-household {
+  border-top: 1px solid var(--color-border-light);
+  padding-top: 0.65rem;
+}
+
+.sf-section-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-bottom: 0.45rem;
+}
+
+/* Currency-prefixed input, matching .sf-income-wrap in the person sections */
+.sf-input-prefix {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.sf-input-prefix > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  font-size: 0.82rem;
+  color: var(--color-text-light);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.sf-input-prefix input {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0 !important;
+}
+
+/* Shown when relationship status is Single, where there is nothing to compare */
+.sf-note {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.7rem;
+  margin: 0 0 0.2rem;
+}
