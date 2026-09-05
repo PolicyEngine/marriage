@@ -162,14 +162,24 @@
       "label": "Medicaid_cost"
     },
     {
-      "variable": "per_capita_chip",
+      "variable": "msp_cost",
       "entity": "person",
-      "label": "Average CHIP payment"
+      "label": "Medicare Savings Program cost"
+    },
+    {
+      "variable": "chip",
+      "entity": "person",
+      "label": "CHIP"
     },
     {
       "variable": "assigned_aca_ptc",
       "entity": "tax_unit",
       "label": "Assigned ACA premium tax credit for tax unit"
+    },
+    {
+      "variable": "basic_health_program",
+      "entity": "tax_unit",
+      "label": "Basic Health Program"
     },
     {
       "variable": "co_omnisalud",
@@ -504,6 +514,11 @@
         "variable": "mn_k12_education_credit",
         "entity": "tax_unit",
         "label": "Minnesota K-12 Education Credit"
+      },
+      {
+        "variable": "mn_renters_credit",
+        "entity": "tax_unit",
+        "label": "Minnesota renter's credit"
       }
     ],
     "MO": [
