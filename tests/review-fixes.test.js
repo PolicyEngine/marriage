@@ -67,8 +67,9 @@ describe("C2: share links keep their country", () => {
     // Legacy links look like #region=CA&head=50000&spouse=30000. They predate
     // the UK route, so reading them as the default would send CA to the UK.
     expect(LEGACY_HASH_COUNTRY).toBe("us");
-    expect(DEFAULT_COUNTRY).toBe("uk");
-    expect(LEGACY_HASH_COUNTRY).not.toBe(DEFAULT_COUNTRY);
+    // Kept separate from DEFAULT_COUNTRY on purpose: they happen to match
+    // today, but a legacy hash must decode as US however the default moves.
+    expect(LEGACY_HASH_COUNTRY).toBe("us");
   });
 
   it("a US region is not a valid UK region, so the mix-up is not silent", () => {

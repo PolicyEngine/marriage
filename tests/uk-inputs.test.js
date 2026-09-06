@@ -217,9 +217,14 @@ describe("UK years", () => {
     }
   });
 
-  it("leads with the UK and defaults to it", () => {
+  it("leads with the UK in the toggle", () => {
     expect(Object.keys(COUNTRIES)[0]).toBe("uk");
-    expect(DEFAULT_COUNTRY).toBe("uk");
+  });
+
+  it("still falls back to the US, which the /us/marriage rewrite relies on", () => {
+    // That route sends no ?country=, so it resolves through this fallback.
+    // Pointing it at the UK would serve the UK calculator on the US page.
+    expect(DEFAULT_COUNTRY).toBe("us");
   });
 });
 
