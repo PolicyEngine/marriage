@@ -1214,7 +1214,10 @@ body {
 
 .single-heatmap {
   padding: 0.75rem;
-  overflow: hidden;
+  /* Not overflow:hidden. The hover tooltip is positioned inside the heatmap
+     container, and since it gained the per-program breakdown it is tall enough
+     to reach this wrapper's edge, where it was being cut in half. */
+  overflow: visible;
 }
 
 .single-heatmap .heatmap-section svg {

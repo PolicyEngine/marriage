@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo, useId } from "react";
+import React, { useState, useRef, useMemo, useId, useLayoutEffect } from "react";
 import {
   interpolateColor,
   isLightColor,
@@ -33,7 +33,25 @@ export default function Heatmap({
   const gradId = useId().replace(/:/g, "");
   const svgRef = useRef(null);
   const containerRef = useRef(null);
+  const tooltipRef = useRef(null);
+  const [tooltipSize, setTooltipSize] = useState({ width: 0, height: 0 });
+
   const [tooltip, setTooltip] = useState(null);
+
+  // Measure the rendered tooltip after paint, so the vertical clamp below uses
+  // its real height. The height varies with the number of driver rows, so it
+  // cannot be hardcoded. Guarded against re-running: it only sets state when
+  // the measurement actually changed.
+  useLayoutEffect(() => {
+    if (!tooltip || !tooltipRef.current) {
+      if (tooltipSize.height !== 0) setTooltipSize({ width: 0, height: 0 });
+      return;
+    }
+    const { offsetWidth, offsetHeight } = tooltipRef.current;
+    if (offsetHeight !== tooltipSize.height || offsetWidth !== tooltipSize.width) {
+      setTooltipSize({ width: offsetWidth, height: offsetHeight });
+    }
+  }, [tooltip, tooltipSize.height, tooltipSize.width]);
 
   const colorscale = valentine ? VALENTINE_SCALE : TEAL_SCALE;
 
@@ -188,6 +206,29 @@ export default function Heatmap({
       tooltipRight = containerRef.current.clientWidth - tooltip.px + 14;
     } else {
       tooltipLeft = tooltip.px + 14;
+    }
+  }
+
+  // Vertical position. The tooltip is centred on the cursor, and since it
+  // gained the per-program breakdown it is tall enough that centring it near
+  // the top or bottom of the chart pushes half of it outside. Clamp it to the
+  // container, measuring the rendered height rather than guessing, because the
+  // number of driver rows varies by cell.
+  const TOOLTIP_MARGIN = 8;
+  let tooltipTop = tooltip ? tooltip.py : 0;
+  let tooltipTransform = "translateY(-50%)";
+  if (tooltip && containerRef.current && tooltipSize.height > 0) {
+    const containerHeight = containerRef.current.clientHeight;
+    const half = tooltipSize.height / 2;
+    if (tooltipSize.height + TOOLTIP_MARGIN * 2 >= containerHeight) {
+      // Taller than the chart: pin to the top and let it use the full height.
+      tooltipTop = TOOLTIP_MARGIN;
+      tooltipTransform = "none";
+    } else {
+      tooltipTop = Math.min(
+        Math.max(tooltip.py, half + TOOLTIP_MARGIN),
+        containerHeight - half - TOOLTIP_MARGIN,
+      );
     }
   }
 
@@ -402,12 +443,13 @@ export default function Heatmap({
         {/* HTML tooltip overlay */}
         {tooltip && (
           <div
+            ref={tooltipRef}
             style={{
               position: "absolute",
               left: tooltipLeft,
               right: tooltipRight,
-              top: tooltip.py,
-              transform: "translateY(-50%)",
+              top: tooltipTop,
+              transform: tooltipTransform,
               background: tooltip.bgColor,
               color: isLightColor(tooltip.bgColor) ? "#1A1A1A" : "white",
               padding: "8px 12px",
