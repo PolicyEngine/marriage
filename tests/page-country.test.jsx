@@ -35,7 +35,7 @@ describe("country resolution from searchParams", () => {
     expect(el.props.initialCountry).toBe("uk");
   });
 
-  it("falls back to null with no country", async () => {
+  it("falls back to null with no country, letting the app apply its default", async () => {
     const el = await Page({ searchParams: params({}) });
     expect(el.props.initialCountry).toBeNull();
   });
@@ -54,8 +54,17 @@ describe("generateMetadata", () => {
     expect(m.alternates.canonical).toBe("https://policyengine.org/uk/marriage");
   });
 
-  it("keeps US copy and canonical by default", async () => {
+  it("uses US copy with no country, which is what /us/marriage sends", async () => {
+    // The host rewrite for the US route passes no query, so this fallback is
+    // the US page's only signal. If it ever returns UK copy, the US page is
+    // serving the wrong calculator.
     const m = await generateMetadata({ searchParams: params({}) });
+    expect(m.description).toMatch(/US state/);
+    expect(m.alternates.canonical).toBe("https://policyengine.org/us/marriage");
+  });
+
+  it("uses US copy on an explicit US route too", async () => {
+    const m = await generateMetadata({ searchParams: params({ country: "us" }) });
     expect(m.description).toMatch(/US state/);
     expect(m.alternates.canonical).toBe("https://policyengine.org/us/marriage");
   });

@@ -108,8 +108,9 @@ body {
   --color-negative-bg: rgba(220, 38, 38, 0.06);
 
   /* Tooltip */
-  --color-tooltip-bg: #0F172A;
-  --color-tooltip-text: #F9FAFB;
+  --color-tooltip-bg: #FFFFFF;
+  --color-tooltip-text: #1F2937;
+  --color-tooltip-border: #CBD5E1;
   --color-tooltip-dotted: #94A3B8;
 
   /* Utility buttons */
@@ -499,10 +500,11 @@ body {
   letter-spacing: 0.04em;
 }
 
+/* No dotted underline: it read as a stray rule under the label. The help
+   cursor and the tooltip on hover are the affordance. */
 .sf-label-tip {
   position: relative;
   cursor: help;
-  border-bottom: 1px dotted var(--color-tooltip-dotted);
   display: inline-block;
 }
 
@@ -511,15 +513,18 @@ body {
   position: absolute;
   left: 0;
   top: calc(100% + 6px);
-  width: 200px;
+  width: max-content;
+  max-width: min(240px, 78vw);
   padding: 0.45rem 0.55rem;
   background: var(--color-tooltip-bg);
   color: var(--color-tooltip-text);
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.4;
+  border: 1px solid var(--color-tooltip-border, var(--color-border));
   border-radius: var(--radius-sm);
-  z-index: 100;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+  z-index: 200;
   pointer-events: none;
   white-space: normal;
 }
@@ -648,12 +653,14 @@ body {
 /* Toggle switches */
 .sf-checks {
   display: flex;
-  gap: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
 }
 
 .sf-toggle {
   display: flex;
   align-items: center;
+  white-space: nowrap;
   gap: 0.4rem;
   font-size: 0.82rem;
   color: var(--color-text-muted);
@@ -705,23 +712,25 @@ body {
 .sf-toggle-tip {
   position: relative;
   cursor: help;
-  border-bottom: 1px dotted var(--color-tooltip-dotted);
 }
 
 .sf-toggle-tooltip {
   display: none;
   position: absolute;
-  right: 0;
+  left: 0;
   top: calc(100% + 6px);
-  width: 200px;
+  width: max-content;
+  max-width: min(240px, 78vw);
   padding: 0.45rem 0.55rem;
   background: var(--color-tooltip-bg);
   color: var(--color-tooltip-text);
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.4;
+  border: 1px solid var(--color-tooltip-border, var(--color-border));
   border-radius: var(--radius-sm);
-  z-index: 100;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+  z-index: 200;
   pointer-events: none;
   white-space: normal;
 }
@@ -1271,15 +1280,18 @@ body {
   position: absolute;
   left: 0;
   top: calc(100% + 8px);
-  width: 240px;
+  width: max-content;
+  max-width: min(260px, 70vw);
   padding: 0.5rem 0.65rem;
   background: var(--color-tooltip-bg);
   color: var(--color-tooltip-text);
   font-size: 0.82rem;
   font-weight: 400;
   line-height: 1.4;
+  border: 1px solid var(--color-tooltip-border, var(--color-border));
   border-radius: var(--radius-sm);
-  z-index: 100;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+  z-index: 200;
   pointer-events: none;
   white-space: normal;
 }
@@ -1290,7 +1302,7 @@ body {
   bottom: 100%;
   left: 16px;
   border: 6px solid transparent;
-  border-bottom-color: var(--color-tooltip-bg);
+  border-bottom-color: var(--color-tooltip-border, var(--color-border));
 }
 
 .program-name-tip:hover .tooltip { display: block; }
@@ -1689,17 +1701,19 @@ body {
 
 /* ---- Footer ---- */
 .app-footer {
-  margin-top: 2rem;
-  padding-top: 1.25rem;
+  margin-top: 0.9rem;
+  padding-top: 0.6rem;
+  padding-bottom: 0.1rem;
+  line-height: 1.3;
   text-align: center;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   color: var(--color-text-light);
   border-top: 1px solid var(--color-border-light);
 }
 .app.is-embedded .app-footer {
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  font-size: 0.78rem;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  font-size: 0.74rem;
   border-top-color: transparent;
 }
 .app-footer a {
@@ -1709,4 +1723,264 @@ body {
 }
 .app-footer a:hover {
   text-decoration: underline;
+}
+
+/* ---------- UK Universal Credit household inputs ---------- */
+
+.sf-household {
+  border-top: 1px solid var(--color-border-light);
+  padding-top: 0.65rem;
+}
+
+.sf-section-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-bottom: 0.45rem;
+}
+
+/* Currency-prefixed input, matching .sf-income-wrap in the person sections */
+.sf-input-prefix {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.sf-input-prefix > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  font-size: 0.82rem;
+  color: var(--color-text-light);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.sf-input-prefix input {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0 !important;
+}
+
+/* Shown when relationship status is Single, where there is nothing to compare */
+.sf-note {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.7rem;
+  margin: 0 0 0.2rem;
+}
+
+
+/* ---------- "More details" panel ---------- */
+
+.sf-more {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  /* Not overflow:hidden — it clipped the hover tooltips inside the panel. */
+}
+
+.sf-more > .sf-more-summary {
+  border-radius: var(--radius-md);
+}
+
+.sf-more-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-heading);
+  cursor: pointer;
+  list-style: none;
+}
+
+.sf-more-summary::-webkit-details-marker {
+  display: none;
+}
+
+.sf-more-summary::after {
+  content: "+";
+  margin-left: auto;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.sf-more[open] .sf-more-summary::after {
+  content: "\2212";
+}
+
+/* Count of optional inputs actually set, so a collapsed panel never hides
+   something that is changing the result. */
+.sf-more-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--color-primary-100, var(--color-border));
+  color: var(--color-heading);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.sf-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.7rem;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg);
+}
+
+.sf-more-body .sf-children {
+  border-top: none;
+}
+
+
+
+.sf-more-people {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Each group in the panel is a card. A hairline rule was not enough
+   separation: the blocks ran together into one undifferentiated column. */
+.sf-extra,
+.sf-group,
+.sf-more-body .sf-children {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-left-width: 3px;
+  border-left-color: var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.7rem 0.7rem;
+}
+
+.sf-extra--you { border-left-color: var(--accent-you-text, var(--color-border)); }
+.sf-extra--partner { border-left-color: var(--accent-partner-text, var(--color-border)); }
+
+.sf-extra-title,
+.sf-group-title,
+.sf-more-body .sf-children-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-heading);
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+/* Space between the stacked field rows inside a card */
+.sf-extra .sf-row + .sf-row,
+.sf-group .sf-row + .sf-row {
+  margin-top: 0.55rem;
+}
+
+/* Inside the panel the uppercase, letter-spaced labels are too wide for a
+   two-column row and wrap, which knocks the inputs out of alignment. Drop the
+   uppercasing and reserve a fixed label height so both columns line up whether
+   the label runs to one line or two. */
+.sf-more-body .sf-field label {
+  font-size: 0.75rem;
+  text-transform: none;
+  letter-spacing: 0;
+  min-height: 1.15rem;
+  display: flex;
+  align-items: flex-end;
+}
+
+.sf-more-body .sf-row {
+  align-items: flex-end;
+}
+
+.sf-more-body .sf-row > .sf-field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.sf-more-body .sf-row > .sf-age {
+  flex: 0 0 62px;
+}
+
+.sf-more-body .sf-row > .sf-money {
+  flex: 0 0 100px;
+}
+
+
+
+.sf-more-body .sf-checks {
+  margin-top: 0.5rem;
+}
+
+/* Narrow money column that pairs with a wider select on the same row */
+.sf-money {
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.sf-input-prefix input:disabled {
+  background: var(--color-bg);
+  color: var(--color-text-light);
+  cursor: not-allowed;
+}
+
+/* ---------- Site shell footer ---------- */
+
+/* The shared PolicyEngineShell footer stacks its links in a tall single
+   column, which on a narrow tool page like this one takes more vertical space
+   than the calculator's own footer line. Lay the links out as a wrapping row
+   and tighten the surrounding spacing. Presentation only, scoped to this app:
+   the shell's markup is untouched, so this is a local override rather than a
+   change to the shared component. Tailwind utilities are single-class
+   specificity, so these selectors win without !important. */
+
+.app-shell-footer-compact footer .grid,
+body footer .grid {
+  margin-top: 1.25rem;
+  gap: 1rem;
+}
+
+/* The link stack: flex-col gap-1 inside the footer grid */
+body footer .grid .flex-col.gap-1 {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 1.5rem;
+  row-gap: 0.4rem;
+}
+
+/* Copyright line sits alongside rather than below */
+body footer .grid .flex-col.gap-3 {
+  gap: 0.5rem;
+}
+
+body footer .grid > div {
+  gap: 1rem;
+}
+
+
+/* Tooltips inside the results card must not be clipped by their ancestors.
+   .table-scroll only scrolls below 768px; above that it is already visible. */
+.results,
+.result-card,
+.tab-panel {
+  overflow: visible;
 }

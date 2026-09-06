@@ -5,7 +5,7 @@ import InputForm from "./components/InputForm";
 import ResultsDisplay from "./components/ResultsDisplay";
 import { getCategorizedPrograms, getHeatmapData } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { getCountry, COUNTRIES } from "@/lib/countries";
+import { getCountry, COUNTRIES, DEFAULT_COUNTRY, LEGACY_HASH_COUNTRY, DEFAULT_BRMA } from "@/lib/countries";
 
 const BASE_PATH =
   process.env.NEXT_PUBLIC_BASE_PATH === ""
@@ -16,7 +16,11 @@ const BASE_PATH =
 function encodeToHash(countryId, formData, isEmbedded) {
   const country = getCountry(countryId);
   const p = new URLSearchParams();
-  if (countryId !== "us" && !isEmbedded) p.set("country", countryId);
+  // Always record the country. Leaving it out to keep the default short made
+  // every hash depend on what the default happens to be, which is how existing
+  // US links broke when the default moved to the UK. Embedded pages take their
+  // country from the route, so they still omit it.
+  if (!isEmbedded) p.set("country", countryId);
   p.set("region", formData.regionCode || formData.stateCode);
   p.set("head", formData.headIncome);
   p.set("spouse", formData.spouseIncome);
@@ -39,6 +43,21 @@ function encodeToHash(countryId, formData, isEmbedded) {
   if (formData.year && formData.year !== country.defaultYear) {
     p.set("year", formData.year);
   }
+  // UK Universal Credit inputs. Only written when non-default so existing
+  // shared links keep their current shape.
+  if (formData.rent) p.set("rent", formData.rent);
+  if (formData.tenureType && formData.tenureType !== "OWNED_OUTRIGHT") {
+    p.set("tenure", formData.tenureType);
+  }
+  if (formData.brma && formData.brma !== DEFAULT_BRMA) p.set("brma", formData.brma);
+  if (formData.childcareCosts) p.set("cc", formData.childcareCosts);
+  if (formData.savings) p.set("sav", formData.savings);
+  if (formData.carerStatus?.head) p.set("hc", "1");
+  if (formData.carerStatus?.spouse) p.set("sc", "1");
+  if (formData.selfEmploymentIncome?.head) p.set("hse", formData.selfEmploymentIncome.head);
+  if (formData.selfEmploymentIncome?.spouse) p.set("sse", formData.selfEmploymentIncome.spouse);
+  if (formData.pensionIncome?.head) p.set("hpi", formData.pensionIncome.head);
+  if (formData.pensionIncome?.spouse) p.set("spi", formData.pensionIncome.spouse);
   return p.toString();
 }
 
@@ -50,7 +69,10 @@ function decodeFromHash() {
     const p = new URLSearchParams(hash);
     const region = p.get("region") || p.get("state");
     if (!region || !p.has("head")) return null;
-    const countryId = p.get("country") || "us";
+    // A hash with no country was written before the country was recorded, and
+    // every one of those is a US link: the UK route did not exist then. Reading
+    // them as the current default would send a US state to the UK model.
+    const countryId = p.get("country") || LEGACY_HASH_COUNTRY;
     const country = getCountry(countryId);
     const children = p.has("c")
       ? p
@@ -84,6 +106,20 @@ function decodeFromHash() {
       },
       children,
       year: p.get("year") || country.defaultYear,
+      rent: Number(p.get("rent") || 0),
+      tenureType: p.get("tenure") || "OWNED_OUTRIGHT",
+      brma: p.get("brma") || DEFAULT_BRMA,
+      childcareCosts: Number(p.get("cc") || 0),
+      savings: Number(p.get("sav") || 0),
+      carerStatus: { head: p.get("hc") === "1", spouse: p.get("sc") === "1" },
+      selfEmploymentIncome: {
+        head: Number(p.get("hse") || 0),
+        spouse: Number(p.get("sse") || 0),
+      },
+      pensionIncome: {
+        head: Number(p.get("hpi") || 0),
+        spouse: Number(p.get("spi") || 0),
+      },
     };
   } catch {
     return null;
@@ -97,7 +133,7 @@ export default function MarriageApp({ initialCountry = null }) {
   // proxies and the browser URL (hence window.location.search) stays at the
   // host path. Keeping it in useState's initial value makes SSR and the first
   // client render agree, so /uk/marriage hydrates straight into UK.
-  const [countryId, setCountryId] = useState(initialCountry || "us");
+  const [countryId, setCountryId] = useState(initialCountry || DEFAULT_COUNTRY);
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [mounted, setMounted] = useState(false);
   const country = getCountry(countryId);
@@ -116,11 +152,11 @@ export default function MarriageApp({ initialCountry = null }) {
 
   // Resolve browser-only state after mount.
   // initialCountry already seeded countryId (for the rewrite path), so it
-  // stays in the chain here as the final fallback before "us".
+  // stays in the chain here as the final fallback before the default country.
   useEffect(() => {
     decoded.current = decodeFromHash();
     const hashCountry = new URLSearchParams(window.location.hash.slice(1)).get("country");
-    const resolvedCountry = decoded.current?.countryId || hashCountry || initialCountry || "us";
+    const resolvedCountry = decoded.current?.countryId || hashCountry || initialCountry || DEFAULT_COUNTRY;
     setCountryId(resolvedCountry);
     setIsEmbedded(window.self !== window.top);
     setMounted(true);
@@ -199,6 +235,17 @@ export default function MarriageApp({ initialCountry = null }) {
       headIncome, spouseIncome, headAge, spouseAge,
       children, disabilityStatus, pregnancyStatus, esiStatus, year,
     } = data;
+    // UK-only inputs, ignored by the US situation builder.
+    const extras = {
+      rent: data.rent || 0,
+      tenureType: data.tenureType || "OWNED_OUTRIGHT",
+      brma: data.brma || DEFAULT_BRMA,
+      savings: data.savings || 0,
+      childcareCosts: data.childcareCosts || 0,
+      carerStatus: data.carerStatus || {},
+      selfEmploymentIncome: data.selfEmploymentIncome || {},
+      pensionIncome: data.pensionIncome || {},
+    };
     const regionCode = data.regionCode || data.stateCode;
     const effectiveRegion = countryId === "us" && regionCode === "NYC" ? "NY" : regionCode;
     const inNYC = countryId === "us" && regionCode === "NYC";
@@ -212,7 +259,7 @@ export default function MarriageApp({ initialCountry = null }) {
       const result = await getCategorizedPrograms(
         countryId, effectiveRegion, headIncome, spouseIncome, children,
         disabilityStatus, year, pregnancyStatus, headAge, spouseAge,
-        esiStatus, inNYC,
+        esiStatus, inNYC, extras,
       );
       setResults(result);
       setLoading(false);
@@ -222,7 +269,7 @@ export default function MarriageApp({ initialCountry = null }) {
         const heatmap = await getHeatmapData(
           countryId, effectiveRegion, children, disabilityStatus, year,
           pregnancyStatus, headIncome, spouseIncome, headAge, spouseAge,
-          esiStatus, inNYC,
+          esiStatus, inNYC, extras,
         );
         setHeatmapData(heatmap);
       } catch (e) {

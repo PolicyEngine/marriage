@@ -1,4 +1,5 @@
 import MarriageApp from "./MarriageApp";
+import { DEFAULT_COUNTRY } from "@/lib/countries";
 
 // Next merges metadata shallowly: a nested object returned here REPLACES the
 // layout's object of the same name rather than merging into it. So openGraph
@@ -31,7 +32,7 @@ function resolveCountry(searchParams) {
 }
 
 export async function generateMetadata({ searchParams }) {
-  const copy = COPY[resolveCountry(await searchParams) || "us"];
+  const copy = COPY[resolveCountry(await searchParams) || DEFAULT_COUNTRY];
   return {
     title: copy.title,
     description: copy.description,

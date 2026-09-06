@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, Suspense, lazy } from "react";
 import { computeTableData, formatCurrency, PROGRAM_DESCRIPTIONS } from "@/lib/utils";
-import { buildCellResults } from "@/lib/api";
+import { buildCellResults, buildCellBreakdown } from "@/lib/api";
 import MetricCards from "./MetricCards";
 
 const Heatmap = lazy(() => import("./Heatmap"));
@@ -241,6 +241,7 @@ export default function ResultsDisplay({
       cellSelection.spouseIdx,
       heatmapData.count || 33,
       heatmapData.stateCreditEntries,
+      heatmapData.extras || {},
     );
   }, [cellSelection, heatmapData, countryId]);
 
@@ -327,6 +328,29 @@ export default function ResultsDisplay({
     (gc) => gc.tab === heatmapKey && gc.invertDelta,
   ) || false;
 
+  // Feeds the heatmap hover: which programs move at the cell under the cursor.
+  // On a single-category heatmap the number in the hover is that category's
+  // delta, so the drivers listed under it must come from the same category.
+  // The summary heatmap is net income, where every category contributes.
+  const BREAKDOWN_CATEGORY = {
+    taxes: "taxes",
+    benefits: "benefits",
+    credits: "credits",
+  };
+
+  function getCellBreakdown(headIdx, spouseIdx) {
+    if (!heatmapData?.programData) return null;
+    return buildCellBreakdown(
+      countryId,
+      heatmapData.programData,
+      headIdx,
+      spouseIdx,
+      heatmapData.count,
+      6,
+      BREAKDOWN_CATEGORY[activeTab] || null,
+    );
+  }
+
   const heatmapProps = heatmapGrid ? {
     grid: heatmapGrid,
     headIncome,
@@ -336,6 +360,7 @@ export default function ResultsDisplay({
     count: heatmapData?.count || 33,
     markerDelta,
     onCellClick: heatmapData?.programData ? handleCellClick : undefined,
+    getBreakdown: heatmapData?.programData ? getCellBreakdown : undefined,
     selectedCell: cellSelection,
     label: heatmapLabel,
     headLine: combinedHeadLine,

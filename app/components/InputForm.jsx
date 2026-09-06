@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 
+import { isRentedTenure } from "@/lib/api";
+import { formatYearLabel } from "@/lib/utils";
+import { UK_BRMAS, DEFAULT_BRMA } from "@/lib/countries";
+
 function formatIncome(value) {
   const num = typeof value === "number" ? value : parseNumber(value);
   if (num === 0 && value === "") return "";
@@ -14,6 +18,10 @@ function parseNumber(str) {
 
 function clamp(val, min, max) {
   return Math.max(min, Math.min(max, val));
+}
+
+function capitaliseFirst(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 function joinWithAnd(items) {
@@ -45,6 +53,29 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     (iv.children || []).map((c) => ({ ...c, age: String(c.age) })),
   );
   const [year, setYear] = useState(iv.year || country.defaultYear);
+  // UK Universal Credit inputs. Each maps to an element of uc_maximum_amount
+  // or a means-test component; see lib/api.js createUKSituation.
+  const [rent, setRent] = useState(formatIncome(iv.rent != null ? iv.rent : 0));
+  const [tenureType, setTenureType] = useState(iv.tenureType || "OWNED_OUTRIGHT");
+  const [brma, setBrma] = useState(iv.brma || DEFAULT_BRMA);
+  const [childcareCosts, setChildcareCosts] = useState(
+    formatIncome(iv.childcareCosts != null ? iv.childcareCosts : 0),
+  );
+  const [savings, setSavings] = useState(formatIncome(iv.savings != null ? iv.savings : 0));
+  const [headCarer, setHeadCarer] = useState(iv.carerStatus?.head || false);
+  const [spouseCarer, setSpouseCarer] = useState(iv.carerStatus?.spouse || false);
+  const [headSelfEmp, setHeadSelfEmp] = useState(
+    formatIncome(iv.selfEmploymentIncome?.head || 0),
+  );
+  const [spouseSelfEmp, setSpouseSelfEmp] = useState(
+    formatIncome(iv.selfEmploymentIncome?.spouse || 0),
+  );
+  const [headPension, setHeadPension] = useState(
+    formatIncome(iv.pensionIncome?.head || 0),
+  );
+  const [spousePension, setSpousePension] = useState(
+    formatIncome(iv.pensionIncome?.spouse || 0),
+  );
   const [errors, setErrors] = useState({});
   const hasMounted = useRef(false);
   const childrenKey = children.map((c) => `${c.age}:${c.isDisabled}`).join(",");
@@ -52,11 +83,70 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   if (country.hasDisability) adultInputs.push("disability");
   if (country.hasPregnancy) adultInputs.push("pregnancy");
   if (country.hasESI) adultInputs.push("ESI status");
+  // Owners get no Universal Credit housing element, so the rent field does
+  // not apply and must not be deducted from net income either.
+  const rentsApply = isRentedTenure(tenureType);
+
+  // Everything under "More details" is optional and country-gated. The badge
+  // counts how many are actually set, so a collapsed panel never hides an
+  // input that is changing the result.
+  // The panel always exists: it holds the partner and children as well as the
+  // optional Universal Credit inputs.
+  const hasExtraInputs = true;
+  const extrasInUse = [
+    rentsApply && parseNumber(rent) > 0,
+    parseNumber(childcareCosts) > 0,
+    parseNumber(savings) > 0,
+    parseNumber(headSelfEmp) > 0,
+    parseNumber(spouseSelfEmp) > 0,
+    parseNumber(headPension) > 0,
+    parseNumber(spousePension) > 0,
+    headCarer,
+    spouseCarer,
+    headDisabled,
+    spouseDisabled,
+    children.length > 0,
+  ].filter(Boolean).length;
+
+  const householdInputs = [];
+  if (country.hasHousing) householdInputs.push("rent and tenure type");
+  if (country.hasChildcare) householdInputs.push("childcare costs");
+  if (country.hasCapital) householdInputs.push("savings");
+  if (country.hasSelfEmployment) adultInputs.push("self-employment income");
+  if (country.hasPensionIncome) adultInputs.push("private pension income");
+  if (country.hasCarer) adultInputs.push("carer status");
+
+  const omitted = ["deductions"];
+  if (!country.hasSelfEmployment) omitted.unshift("self-employment income");
+  if (!country.hasHousing) omitted.unshift("rent");
+  if (!country.hasChildcare) omitted.unshift("childcare expenses");
+  if (!country.hasCapital) omitted.unshift("savings and capital");
+  if (!country.hasPensionIncome) omitted.unshift("unearned income");
+
+  const separateLabel = country.id === "uk" ? "living-apart" : "unmarried";
   const assumptions = [
-    `The calculator uses only the inputs shown here: ${country.regionLabel.toLowerCase()}, year, each adult's wages, ${joinWithAnd(adultInputs)}, and each child's ${country.hasDisability ? "age and disability" : "age"}.`,
-    "Income means wages and salaries only. Unearned income, self-employment income, rent, childcare expenses, deductions, and other omitted income or expense inputs are assumed to be zero.",
-    "For the unmarried comparison, all children are assigned to you and your partner is simulated separately without children.",
+    `The calculator uses only the inputs shown here: ${country.regionLabel.toLowerCase()}, year, each adult's wages, ${joinWithAnd(adultInputs)}${householdInputs.length ? `, the household's ${joinWithAnd(householdInputs)}` : ""}, and each child's ${country.hasDisability && country.id !== "uk" ? "age and disability" : "age"}.`,
+    `Earnings mean wages and salaries only. ${capitaliseFirst(joinWithAnd([...omitted, "other omitted inputs"]))} are assumed to be zero.`,
+    `For the ${separateLabel} comparison, all children are assigned to you and your partner is simulated separately without children.`,
   ];
+  if (country.id === "uk") {
+    assumptions.push(
+      "The UK assesses couples on whether they live together, not on marriage. This compares a cohabiting couple with two separate households.",
+    );
+  }
+  if (country.hasHousing && rentsApply) {
+    assumptions.push(
+      "Net income is shown after rent. PolicyEngine counts the housing element as income but does not subtract rent, so living apart would otherwise collect housing support twice and pay no rent.",
+    );
+    assumptions.push(
+      "Living apart, each household pays the rent entered and savings are split evenly.",
+    );
+  }
+  if (country.hasHousing && !rentsApply) {
+    assumptions.push(
+      "Owners receive no housing element, so rent is not applied. Mortgage costs are not modelled.",
+    );
+  }
   if (country.hasESI) {
     assumptions.push("If Has ESI is checked, healthcare benefits are excluded from the analysis.");
   }
@@ -78,6 +168,25 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         setHeadPregnant(false);
         setSpousePregnant(false);
       }
+      if (!country.hasHousing) {
+        setRent(formatIncome(0));
+        setTenureType("OWNED_OUTRIGHT");
+        setBrma(DEFAULT_BRMA);
+      }
+      if (!country.hasChildcare) setChildcareCosts(formatIncome(0));
+      if (!country.hasCapital) setSavings(formatIncome(0));
+      if (!country.hasCarer) {
+        setHeadCarer(false);
+        setSpouseCarer(false);
+      }
+      if (!country.hasSelfEmployment) {
+        setHeadSelfEmp(formatIncome(0));
+        setSpouseSelfEmp(formatIncome(0));
+      }
+      if (!country.hasPensionIncome) {
+        setHeadPension(formatIncome(0));
+        setSpousePension(formatIncome(0));
+      }
       if (!country.hasESI) {
         setHeadESI(false);
         setSpouseESI(false);
@@ -93,7 +202,10 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     }
     if (onInputChange) onInputChange();
   }, [regionCode, headIncome, spouseIncome, headAge, spouseAge,
-    headDisabled, spouseDisabled, headESI, spouseESI, year, childrenKey]);
+    headDisabled, spouseDisabled, headESI, spouseESI, year, childrenKey,
+    rent, tenureType, brma, childcareCosts, savings,
+    headCarer, spouseCarer, headSelfEmp, spouseSelfEmp,
+    headPension, spousePension]);
 
   function buildFormData() {
     return {
@@ -108,6 +220,20 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       pregnancyStatus: { head: headPregnant, spouse: spousePregnant },
       esiStatus: { head: headESI, spouse: spouseESI },
       year,
+      rent: rentsApply ? parseNumber(rent) : 0,
+      tenureType,
+      brma,
+      childcareCosts: parseNumber(childcareCosts),
+      savings: parseNumber(savings),
+      carerStatus: { head: headCarer, spouse: spouseCarer },
+      selfEmploymentIncome: {
+        head: parseNumber(headSelfEmp),
+        spouse: parseNumber(spouseSelfEmp),
+      },
+      pensionIncome: {
+        head: parseNumber(headPension),
+        spouse: parseNumber(spousePension),
+      },
     };
   }
 
@@ -195,7 +321,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
           <label>Year</label>
           <select value={year} onChange={(e) => setYear(e.target.value)}>
             {country.availableYears.map((y) => (
-              <option key={y} value={y}>{country.id === "uk" ? `${y}-${(Number(y) + 1).toString().slice(2)}` : y}</option>
+              <option key={y} value={y}>{formatYearLabel(y)}</option>
             ))}
           </select>
         </div>
@@ -218,9 +344,9 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         onPregnantChange={setHeadPregnant}
         hasESI={headESI}
         onESIChange={setHeadESI}
-        showDisability={country.hasDisability}
-        showPregnancy={country.hasPregnancy}
-        showESI={country.hasESI}
+        showDisability={false}
+        showPregnancy={false}
+        showESI={false}
         currencySymbol={country.currencySymbol}
       />
 
@@ -235,65 +361,241 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         onAgeChange={setSpouseAge}
         onAgeBlur={() => handleAgeBlur(setSpouseAge, spouseAge, "spouseAge")}
         ageError={errors.spouseAge}
-        disabled={spouseDisabled}
-        onDisabledChange={setSpouseDisabled}
-        pregnant={spousePregnant}
-        onPregnantChange={setSpousePregnant}
-        hasESI={spouseESI}
-        onESIChange={setSpouseESI}
-        showDisability={country.hasDisability}
-        showPregnancy={country.hasPregnancy}
-        showESI={country.hasESI}
+        showDisability={false}
+        showPregnancy={false}
+        showESI={false}
         currencySymbol={country.currencySymbol}
       />
 
-      <div className="sf-children">
-        <div className="sf-children-header">
-          <span className="sf-children-label sf-label-tip">
-            Children
-            <span className="sf-label-tooltip">All dependents are attributed to the head of household when considering unmarried filers.</span>
-          </span>
-          <button
-            type="button"
-            className="btn-add-child"
-            aria-label="Add child"
-            onClick={() => setChildren([...children, { age: "5", isDisabled: false }])}
-          >+</button>
-        </div>
-        {children.map((child, i) => (
-          <div className="sf-child" key={i}>
-            <div className="sf-child-age">
-              <input
-                type="number"
-                min="0"
-                max="18"
-                placeholder="Age"
-                aria-label={`Child ${i + 1} age`}
-                value={child.age}
-                className={errors[`childAge${i}`] ? "input-error" : ""}
-                onChange={(e) => updateChild(i, "age", e.target.value)}
-                onBlur={() => handleChildAgeBlur(i, child.age)}
-              />
-              <span className="sf-child-age-suffix">yr</span>
+      {hasExtraInputs && (
+        <details className="sf-more">
+          <summary className="sf-more-summary">
+            More details
+            {extrasInUse > 0 && <span className="sf-more-badge">{extrasInUse}</span>}
+          </summary>
+          <div className="sf-more-body">
+            <ExtraAdultFields
+              title="You"
+              accent="you"
+              currencySymbol={country.currencySymbol}
+              selfEmployment={headSelfEmp}
+              onSelfEmploymentChange={(v) => handleIncomeChange(setHeadSelfEmp, v)}
+              onSelfEmploymentBlur={() => handleIncomeBlur(setHeadSelfEmp, headSelfEmp, "headSelfEmp")}
+              pension={headPension}
+              onPensionChange={(v) => handleIncomeChange(setHeadPension, v)}
+              onPensionBlur={() => handleIncomeBlur(setHeadPension, headPension, "headPension")}
+              carer={headCarer}
+              onCarerChange={setHeadCarer}
+              disabled={headDisabled}
+              onDisabledChange={setHeadDisabled}
+              pregnant={headPregnant}
+              onPregnantChange={setHeadPregnant}
+              hasESI={headESI}
+              onESIChange={setHeadESI}
+              showSelfEmployment={country.hasSelfEmployment}
+              showPension={country.hasPensionIncome}
+              showCarer={country.hasCarer}
+              showDisability={country.hasDisability}
+              showPregnancy={country.hasPregnancy}
+              showESI={country.hasESI}
+            />
+
+            <ExtraAdultFields
+              title="Your partner"
+              accent="partner"
+              currencySymbol={country.currencySymbol}
+              selfEmployment={spouseSelfEmp}
+              onSelfEmploymentChange={(v) => handleIncomeChange(setSpouseSelfEmp, v)}
+              onSelfEmploymentBlur={() => handleIncomeBlur(setSpouseSelfEmp, spouseSelfEmp, "spouseSelfEmp")}
+              pension={spousePension}
+              onPensionChange={(v) => handleIncomeChange(setSpousePension, v)}
+              onPensionBlur={() => handleIncomeBlur(setSpousePension, spousePension, "spousePension")}
+              carer={spouseCarer}
+              onCarerChange={setSpouseCarer}
+              disabled={spouseDisabled}
+              onDisabledChange={setSpouseDisabled}
+              pregnant={spousePregnant}
+              onPregnantChange={setSpousePregnant}
+              hasESI={spouseESI}
+              onESIChange={setSpouseESI}
+              showSelfEmployment={country.hasSelfEmployment}
+              showPension={country.hasPensionIncome}
+              showCarer={country.hasCarer}
+              showDisability={country.hasDisability}
+              showPregnancy={country.hasPregnancy}
+              showESI={country.hasESI}
+            />
+
+            <div className="sf-children">
+              <div className="sf-children-header">
+                <span className="sf-children-label sf-label-tip">
+                  Children
+                  <span className="sf-label-tooltip">All dependents are attributed to the head of household when considering unmarried filers.</span>
+                </span>
+                <button
+                  type="button"
+                  className="btn-add-child"
+                  aria-label="Add child"
+                  onClick={() => setChildren([...children, { age: "5", isDisabled: false }])}
+                >+</button>
+              </div>
+              {children.map((child, i) => (
+                <div className="sf-child" key={i}>
+                  <div className="sf-child-age">
+                    <input
+                      type="number"
+                      min="0"
+                      max="18"
+                      placeholder="Age"
+                      aria-label={`Child ${i + 1} age`}
+                      value={child.age}
+                      className={errors[`childAge${i}`] ? "input-error" : ""}
+                      onChange={(e) => updateChild(i, "age", e.target.value)}
+                      onBlur={() => handleChildAgeBlur(i, child.age)}
+                    />
+                    <span className="sf-child-age-suffix">yr</span>
+                  </div>
+                  <label className="sf-toggle">
+                    <input
+                      type="checkbox"
+                      checked={child.isDisabled}
+                      onChange={(e) => updateChild(i, "isDisabled", e.target.checked)}
+                    />
+                    <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
+                    Disabled
+                  </label>
+                  <button
+                    type="button"
+                    className="sf-child-rm"
+                    aria-label={`Remove child ${i + 1}`}
+                    onClick={() => setChildren(children.filter((_, j) => j !== i))}
+                  >&times;</button>
+                </div>
+              ))}
             </div>
-            <label className="sf-toggle">
-              <input
-                type="checkbox"
-                checked={child.isDisabled}
-                onChange={(e) => updateChild(i, "isDisabled", e.target.checked)}
-              />
-              <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
-              Disabled
-            </label>
-            <button
-              type="button"
-              className="sf-child-rm"
-              aria-label={`Remove child ${i + 1}`}
-              onClick={() => setChildren(children.filter((_, j) => j !== i))}
-            >&times;</button>
+
+
+            {country.hasHousing && (
+              <div className="sf-group">
+                <div className="sf-group-title">Housing</div>
+                <div className="sf-row">
+                  <div className="sf-field sf-grow">
+                    <label className="sf-label-tip">
+                      Tenure
+                      <span className="sf-label-tooltip">
+                        Private rent is capped at the Local Housing Allowance
+                        rate. Social rent is not. Owners get no housing element.
+                      </span>
+                    </label>
+                    <select value={tenureType} onChange={(e) => setTenureType(e.target.value)}>
+                      <option value="OWNED_OUTRIGHT">Owned outright</option>
+                      <option value="OWNED_WITH_MORTGAGE">Owned with a mortgage</option>
+                      <option value="RENT_PRIVATELY">Rented privately</option>
+                      <option value="RENT_FROM_COUNCIL">Rented from council</option>
+                      <option value="RENT_FROM_HA">Rented from housing association</option>
+                    </select>
+                  </div>
+                  <div className="sf-field sf-money">
+                    <label className="sf-label-tip">
+                      Rent
+                      <span className="sf-label-tooltip">
+                        Yearly. Drives the housing element. Net income is shown
+                        after rent, and each household pays it when living apart.
+                      </span>
+                    </label>
+                    <div className="sf-input-prefix">
+                      <span>{country.currencySymbol}</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        aria-label="Annual rent"
+                        value={rentsApply ? rent : ""}
+                        placeholder={rentsApply ? "" : "n/a"}
+                        disabled={!rentsApply}
+                        className={errors.rent ? "input-error" : ""}
+                        onChange={(e) => handleIncomeChange(setRent, e.target.value)}
+                        onBlur={() => handleIncomeBlur(setRent, rent, "rent")}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {country.hasHousing && tenureType === "RENT_PRIVATELY" && (
+              <div className="sf-field">
+                <label className="sf-label-tip">
+                  Rental market area
+                  <span className="sf-label-tooltip">
+                    Private rent is capped at the Local Housing Allowance rate
+                    for the local Broad Rental Market Area, which varies widely.
+                    Social rent is not capped, so this does not apply there.
+                  </span>
+                </label>
+                <select value={brma} onChange={(e) => setBrma(e.target.value)}>
+                  {UK_BRMAS.map((a) => (
+                    <option key={a.code} value={a.code}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {(country.hasChildcare || country.hasCapital) && (
+              <div className="sf-group">
+                <div className="sf-group-title">Costs and capital</div>
+                <div className="sf-row">
+                  {country.hasChildcare && (
+                    <div className="sf-field sf-grow">
+                      <label className="sf-label-tip">
+                        Childcare
+                        <span className="sf-label-tooltip">
+                          Yearly. Only paid when the work condition is met, and
+                          capped per child. Split evenly across the children.
+                        </span>
+                      </label>
+                      <div className="sf-input-prefix">
+                        <span>{country.currencySymbol}</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          aria-label="Annual childcare costs"
+                          value={childcareCosts}
+                          className={errors.childcareCosts ? "input-error" : ""}
+                          onChange={(e) => handleIncomeChange(setChildcareCosts, e.target.value)}
+                          onBlur={() => handleIncomeBlur(setChildcareCosts, childcareCosts, "childcareCosts")}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {country.hasCapital && (
+                    <div className="sf-field sf-grow">
+                      <label className="sf-label-tip">
+                        Savings
+                        <span className="sf-label-tooltip">
+                          Entitlement is nil above the upper capital limit.
+                          Split evenly between the two adults when living apart.
+                        </span>
+                      </label>
+                      <div className="sf-input-prefix">
+                        <span>{country.currencySymbol}</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          aria-label="Savings"
+                          value={savings}
+                          className={errors.savings ? "input-error" : ""}
+                          onChange={(e) => handleIncomeChange(setSavings, e.target.value)}
+                          onBlur={() => handleIncomeBlur(setSavings, savings, "savings")}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        ))}
-      </div>
+        </details>
+      )}
 
       <button type="submit" className="btn-calc" disabled={loading}>
         {loading ? <><span className="spinner" /> Calculating...</> : "Calculate"}
@@ -313,6 +615,175 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   );
 }
 
+// The optional per-adult inputs, shown inside "More details" so the visible
+// form stays down to relationship status, region, year and your own income.
+function ExtraAdultFields({
+  title, accent, currencySymbol,
+  income, onIncomeChange, onIncomeBlur, incomeError, showIncome,
+  age, onAgeChange, onAgeBlur, ageError,
+  selfEmployment, onSelfEmploymentChange, onSelfEmploymentBlur, showSelfEmployment,
+  pension, onPensionChange, onPensionBlur, showPension,
+  carer, onCarerChange, showCarer,
+  disabled, onDisabledChange, showDisability,
+  pregnant, onPregnantChange, showPregnancy,
+  hasESI, onESIChange, showESI,
+}) {
+  const showMoney = showSelfEmployment || showPension;
+  const showChecks = showCarer || showDisability || showPregnancy || showESI;
+  if (!showIncome && !showMoney && !showChecks) return null;
+  return (
+    <div className={`sf-extra sf-extra--${accent}`}>
+      <div className="sf-extra-title">{title}</div>
+      {showIncome && (
+        <div className="sf-row">
+          <div className="sf-field sf-grow">
+            <label className="sf-label-tip">
+              Income
+              <span className="sf-label-tooltip">Wages and salaries.</span>
+            </label>
+            <div className="sf-input-prefix">
+              <span>{currencySymbol}</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                aria-label={`${title} income`}
+                value={income}
+                className={incomeError ? "input-error" : ""}
+                onChange={(e) => onIncomeChange(e.target.value)}
+                onBlur={onIncomeBlur}
+              />
+            </div>
+          </div>
+          <div className="sf-field sf-age">
+            <label>Age</label>
+            <input
+              type="number"
+              min="18"
+              max="100"
+              aria-label={`${title} age`}
+              value={age}
+              className={ageError ? "input-error" : ""}
+              onChange={(e) => onAgeChange(e.target.value)}
+              onBlur={onAgeBlur}
+            />
+          </div>
+        </div>
+      )}
+      {showMoney && (
+        <div className="sf-row">
+          {showSelfEmployment && (
+            <div className="sf-field sf-grow">
+              <label className="sf-label-tip">
+                Self-employment
+                <span className="sf-label-tooltip">
+                  Universal Credit applies a minimum income floor to
+                  self-employed earnings, so a pound earned this way can cost
+                  more entitlement than a pound of wages.
+                </span>
+              </label>
+              <div className="sf-input-prefix">
+                <span>{currencySymbol}</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  aria-label={`${title} self-employment income`}
+                  value={selfEmployment}
+                  onChange={(e) => onSelfEmploymentChange(e.target.value)}
+                  onBlur={onSelfEmploymentBlur}
+                />
+              </div>
+            </div>
+          )}
+          {showPension && (
+            <div className="sf-field sf-grow">
+              <label className="sf-label-tip">
+                Private pension
+                <span className="sf-label-tooltip">
+                  Counted as unearned income, which reduces Universal Credit
+                  pound for pound rather than through the earnings taper.
+                </span>
+              </label>
+              <div className="sf-input-prefix">
+                <span>{currencySymbol}</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  aria-label={`${title} private pension income`}
+                  value={pension}
+                  onChange={(e) => onPensionChange(e.target.value)}
+                  onBlur={onPensionBlur}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {showChecks && (
+        <div className="sf-checks">
+          {showDisability && (
+            <label className="sf-toggle sf-toggle-tip">
+              <input
+                type="checkbox"
+                checked={disabled}
+                aria-label={`${title} disabled`}
+                onChange={(e) => onDisabledChange(e.target.checked)}
+              />
+              <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
+              Disabled
+              <span className="sf-toggle-tooltip">
+                Adds the Universal Credit limited capability for work element,
+                and makes a couple without children eligible for a work
+                allowance, so earnings taper more slowly.
+              </span>
+            </label>
+          )}
+          {showCarer && (
+            <label className="sf-toggle sf-toggle-tip">
+              <input
+                type="checkbox"
+                checked={carer}
+                aria-label={`${title} carer`}
+                onChange={(e) => onCarerChange(e.target.checked)}
+              />
+              <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
+              Carer
+              <span className="sf-toggle-tooltip">
+                Caring for a disabled person at least 35 hours a week adds the
+                carer element. It is separate from being disabled yourself, and
+                it follows the individual, so it can survive a separation.
+              </span>
+            </label>
+          )}
+          {showPregnancy && (
+            <label className="sf-toggle">
+              <input
+                type="checkbox"
+                checked={pregnant}
+                aria-label={`${title} pregnant`}
+                onChange={(e) => onPregnantChange(e.target.checked)}
+              />
+              <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
+              Pregnant
+            </label>
+          )}
+          {showESI && (
+            <label className="sf-toggle">
+              <input
+                type="checkbox"
+                checked={hasESI}
+                aria-label={`${title} has ESI`}
+                onChange={(e) => onESIChange(e.target.checked)}
+              />
+              <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
+              Has ESI
+            </label>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PersonSection({
   title, accent, income, onIncomeChange, onIncomeBlur, incomeError,
   age, onAgeChange, onAgeBlur, ageError,
@@ -326,7 +797,7 @@ function PersonSection({
         <div className="sf-field sf-grow">
           <label className="sf-label-tip">
             Income
-            <span className="sf-label-tooltip">Wages and salaries only. Other inputs (unearned income, rent, childcare expenses, etc.) are assumed to be zero.</span>
+            <span className="sf-label-tooltip">Wages and salaries. Enter other income in the fields below where shown.</span>
           </label>
           <div className="sf-income-wrap">
             <span className="sf-dollar">{currencySymbol}</span>
