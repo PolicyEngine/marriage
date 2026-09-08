@@ -4,6 +4,7 @@ import { isRentedTenure } from "@/lib/api";
 import { formatYearLabel } from "@/lib/utils";
 import { UK_BRMAS, DEFAULT_BRMA } from "@/lib/countries";
 import FormSelect from "./FormSelect";
+import USChildcareInputs, { childCareFormError, normalizeChildcareChild } from "./USChildcareInputs";
 
 function formatIncome(value) {
   const num = typeof value === "number" ? value : parseNumber(value);
@@ -44,6 +45,11 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   );
   const [headDisabled, setHeadDisabled] = useState(iv.disabilityStatus?.head || false);
   const [spouseDisabled, setSpouseDisabled] = useState(iv.disabilityStatus?.spouse || false);
+  const [ccdfSlotAvailable, setCcdfSlotAvailable] = useState(iv.ccdfSlotAvailable !== false);
+  const [childcareCounty, setChildcareCounty] = useState(iv.childcareCounty || "");
+  const [childcareWorkHours, setChildcareWorkHours] = useState(iv.childcareWorkHours || { head: 40, spouse: 40 });
+  const [includeHeadStart, setIncludeHeadStart] = useState(iv.includeHeadStart || false);
+  const [childcareActivityEligible, setChildcareActivityEligible] = useState(iv.childcareActivityEligible || false);
   const [headAge, setHeadAge] = useState(iv.headAge ? String(iv.headAge) : String(country.defaultAge));
   const [spouseAge, setSpouseAge] = useState(iv.spouseAge ? String(iv.spouseAge) : String(country.defaultAge));
   const [headPregnant, setHeadPregnant] = useState(iv.pregnancyStatus?.head || false);
@@ -81,9 +87,12 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   const [errors, setErrors] = useState({});
   const previousInputs = useRef(null);
   const syncedIncomes = useRef(null);
-  const childrenKey = children.map((c) => `${c.age}:${c.isDisabled}`).join(",");
+  const childrenKey = JSON.stringify(children);
+  const childcareWorkHoursKey = JSON.stringify(childcareWorkHours);
+  const hasPaidChildcare = country.id === "us" && children.some((child) => Number(child.childcareCost) > 0);
+  const nondefaultWorkHours = country.id === "us" && (Number(childcareWorkHours.head) !== 40 || Number(childcareWorkHours.spouse) !== 40);
   const adultInputs = ["age"];
-  if (country.hasDisability) adultInputs.push("disability");
+  if (country.hasDisability) adultInputs.push(country.id === "us" ? "SSI disability criteria" : "disability");
   if (country.hasPregnancy) adultInputs.push("pregnancy");
   if (country.hasESI) adultInputs.push("ESI status");
   // Owners get no Universal Credit housing element, so the rent field does
@@ -108,12 +117,18 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     spouseCarer,
     headDisabled,
     spouseDisabled,
+    country.id === "us" && !ccdfSlotAvailable,
+    hasPaidChildcare,
+    country.id === "us" && Boolean(childcareCounty),
+    nondefaultWorkHours,
+    country.id === "us" && includeHeadStart,
     children.length > 0,
   ].filter(Boolean).length;
 
   const householdInputs = [];
   if (country.hasHousing) householdInputs.push("rent and tenure type");
-  if (country.hasChildcare) householdInputs.push("childcare costs");
+  if (country.hasChildcare || hasPaidChildcare) householdInputs.push("childcare costs");
+  if ((hasPaidChildcare || nondefaultWorkHours)) adultInputs.push("weekly work hours");
   if (country.hasCapital) householdInputs.push("savings");
   if (country.hasSelfEmployment) adultInputs.push("self-employment income");
   if (country.hasPensionIncome) adultInputs.push("private pension income");
@@ -122,7 +137,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   const omitted = ["deductions"];
   if (!country.hasSelfEmployment) omitted.unshift("self-employment income");
   if (!country.hasHousing) omitted.unshift("rent");
-  if (!country.hasChildcare) omitted.unshift("childcare expenses");
+  if (!country.hasChildcare && !hasPaidChildcare) omitted.unshift("childcare expenses");
   if (!country.hasCapital) omitted.unshift("savings and capital");
   if (!country.hasPensionIncome) omitted.unshift("unearned income");
 
@@ -133,6 +148,10 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   ];
   if (country.id === "us") {
     assumptions.push("All children are assumed to be both adults' children.");
+    assumptions.push("SSI disability criteria describe medical disability, not financial eligibility. The model still applies earnings, income, resources, and other eligibility rules; resources are assumed to be zero.");
+    if (hasPaidChildcare) assumptions.push("Childcare costs are annual prices before subsidies, excluding free Head Start hours. Children and their childcare costs stay with you in the separate-household comparison. Costs still apply when a funded childcare slot is unavailable.");
+    if (hasPaidChildcare || nondefaultWorkHours) assumptions.push("Work hours stay fixed as the income grid varies and may affect childcare assistance and other benefits.");
+    if (includeHeadStart) assumptions.push("Head Start and Early Head Start amounts are modeled service values for eligible enrollment, not cash payments or guaranteed places.");
   }
   if (country.id === "us" && livingArrangement === "cohabiting") {
     assumptions.push(
@@ -175,6 +194,12 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       setRegionCode(country.defaultRegion);
       setYear(country.defaultYear);
       setLivingArrangement("cohabiting");
+      setCcdfSlotAvailable(true);
+      setChildcareCounty("");
+      setChildcareWorkHours({ head: 40, spouse: 40 });
+      setIncludeHeadStart(false);
+      setChildcareActivityEligible(false);
+      setChildren((current) => current.map((child) => ({ age: child.age, isDisabled: child.isDisabled })));
       setHeadAge(String(country.defaultAge));
       setSpouseAge(String(country.defaultAge));
       if (!country.hasDisability) {
@@ -211,10 +236,21 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     }
   }, [country]);
 
+  // County and state-specific provider choices cannot survive a state change.
+  const previousRegion = useRef(regionCode);
+  useEffect(() => {
+    if (previousRegion.current === regionCode) return;
+    previousRegion.current = regionCode;
+    setChildcareCounty("");
+    setChildcareActivityEligible(false);
+    setChildren((current) => current.map((child) => ({ ...child, childcareProviders: {} })));
+  }, [regionCode]);
+
   // Clear stale results when inputs change (but not on initial mount)
   useEffect(() => {
     const inputs = [regionCode, headIncome, spouseIncome, headAge, spouseAge,
       headDisabled, spouseDisabled, headPregnant, spousePregnant, headESI, spouseESI, year, childrenKey, livingArrangement,
+      ccdfSlotAvailable, childcareCounty, childcareWorkHoursKey, includeHeadStart, childcareActivityEligible,
       rent, tenureType, brma, childcareCosts, savings,
       headCarer, spouseCarer, headSelfEmp, spouseSelfEmp, headPension, spousePension];
     const previous = previousInputs.current;
@@ -230,6 +266,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     if (onInputChange) onInputChange();
   }, [regionCode, headIncome, spouseIncome, headAge, spouseAge,
     headDisabled, spouseDisabled, headPregnant, spousePregnant, headESI, spouseESI, year, childrenKey, livingArrangement,
+    ccdfSlotAvailable, childcareCounty, childcareWorkHoursKey, includeHeadStart, childcareActivityEligible,
     rent, tenureType, brma, childcareCosts, savings,
     headCarer, spouseCarer, headSelfEmp, spouseSelfEmp,
     headPension, spousePension, onInputChange]);
@@ -242,8 +279,11 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       spouseIncome: parseNumber(spouseIncome),
       headAge: Number(headAge) || country.defaultAge,
       spouseAge: Number(spouseAge) || country.defaultAge,
-      children: children.map((c) => ({ ...c, age: Number(c.age) || 0 })),
+      children: children.map((c) => country.id === "us"
+        ? normalizeChildcareChild({ ...c, age: Number(c.age) || 0 }, regionCode)
+        : { age: Number(c.age) || 0, isDisabled: c.isDisabled || false }),
       disabilityStatus: { head: headDisabled, spouse: spouseDisabled },
+      ...(country.id === "us" ? { ccdfSlotAvailable, childcareCounty, childcareWorkHours, includeHeadStart, childcareActivityEligible: regionCode === "NV" && childcareActivityEligible } : {}),
       pregnancyStatus: { head: headPregnant, spouse: spousePregnant },
       esiStatus: { head: headESI, spouse: spouseESI },
       year,
@@ -322,7 +362,15 @@ export default function InputForm({ country, countries, countryId, onCountryChan
 
   function handleSubmit(e) {
     e.preventDefault();
-    onCalculate(buildFormData());
+    const data = buildFormData();
+    const childcareError = country.id === "us" ? childCareFormError(data) : null;
+    if (childcareError) {
+      setErrors((current) => ({ ...current, childcare: childcareError }));
+      e.currentTarget.querySelector(".sf-more").open = true;
+      return;
+    }
+    setErrors({});
+    onCalculate(data);
   }
 
   return (
@@ -450,6 +498,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
               showSelfEmployment={country.hasSelfEmployment}
               showPension={country.hasPensionIncome}
               showCarer={country.hasCarer}
+              usesSSIDisability={country.id === "us"}
               showDisability={country.hasDisability}
               showPregnancy={country.hasPregnancy}
               showESI={country.hasESI}
@@ -476,6 +525,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
               showSelfEmployment={country.hasSelfEmployment}
               showPension={country.hasPensionIncome}
               showCarer={country.hasCarer}
+              usesSSIDisability={country.id === "us"}
               showDisability={country.hasDisability}
               showPregnancy={country.hasPregnancy}
               showESI={country.hasESI}
@@ -495,7 +545,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
                 >+</button>
               </div>
               {children.map((child, i) => (
-                <div className="sf-child" key={i}>
+                <div className={`sf-child${country.id === "us" ? " sf-child--us" : ""}`} key={i}>
                   <div className="sf-child-age">
                     <input
                       type="number"
@@ -513,11 +563,12 @@ export default function InputForm({ country, countries, countryId, onCountryChan
                   <label className="sf-toggle">
                     <input
                       type="checkbox"
-                      checked={child.isDisabled}
+                      checked={child.isDisabled || false}
+                      aria-label={`Child ${i + 1} ${country.id === "us" ? "meets SSI disability criteria" : "disabled"}`}
                       onChange={(e) => updateChild(i, "isDisabled", e.target.checked)}
                     />
                     <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
-                    Disabled
+                    {country.id === "us" ? "Meets SSI disability criteria" : "Disabled"}
                   </label>
                   <button
                     type="button"
@@ -529,6 +580,17 @@ export default function InputForm({ country, countries, countryId, onCountryChan
               ))}
             </div>
 
+            {country.id === "us" && (
+              <USChildcareInputs
+                regionCode={regionCode} childEntries={children} updateChild={updateChild}
+                ccdfSlotAvailable={ccdfSlotAvailable} onCcdfSlotAvailableChange={setCcdfSlotAvailable}
+                childcareCounty={childcareCounty} onCountyChange={setChildcareCounty}
+                childcareWorkHours={childcareWorkHours} onWorkHoursChange={setChildcareWorkHours}
+                includeHeadStart={includeHeadStart} onIncludeHeadStartChange={setIncludeHeadStart}
+                childcareActivityEligible={childcareActivityEligible} onActivityEligibleChange={setChildcareActivityEligible}
+                error={errors.childcare}
+              />
+            )}
 
             {country.hasHousing && (
               <div className="sf-group">
@@ -688,6 +750,7 @@ function ExtraAdultFields({
   pension, onPensionChange, onPensionBlur, showPension,
   carer, onCarerChange, showCarer,
   disabled, onDisabledChange, showDisability,
+  usesSSIDisability,
   pregnant, onPregnantChange, showPregnancy,
   hasESI, onESIChange, showESI,
 }) {
@@ -781,6 +844,7 @@ function ExtraAdultFields({
           )}
         </div>
       )}
+      {usesSSIDisability && <p className="sf-input-note">SSI medical criteria only. Also applies disability status to other programs; earnings, income, and resources still affect eligibility.</p>}
       {showChecks && (
         <div className="sf-checks">
           {showDisability && (
@@ -788,15 +852,15 @@ function ExtraAdultFields({
               <input
                 type="checkbox"
                 checked={disabled}
-                aria-label={`${title} disabled`}
+                aria-label={`${title} ${usesSSIDisability ? "meets SSI disability criteria" : "disabled"}`}
                 onChange={(e) => onDisabledChange(e.target.checked)}
               />
               <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
-              Disabled
+              {usesSSIDisability ? "Meets SSI disability criteria" : "Disabled"}
               <span className="sf-toggle-tooltip">
-                Adds the Universal Credit limited capability for work element,
-                and makes a couple without children eligible for a work
-                allowance, so earnings taper more slowly.
+                {usesSSIDisability
+                  ? "Meets SSI medical disability criteria. Also sets general disability status for other programs; earnings, income, and resources still affect eligibility."
+                  : "Adds the Universal Credit limited capability for work element, and makes a couple without children eligible for a work allowance, so earnings taper more slowly."}
               </span>
             </label>
           )}

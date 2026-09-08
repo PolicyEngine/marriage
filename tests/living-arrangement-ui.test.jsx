@@ -173,9 +173,10 @@ describe("comparison results", () => {
   it("keeps comparison methodology in the app results instead of shared chrome", () => {
     render(<ResultsDisplay {...props} results={cohabitingResults} />);
     expect(screen.getByRole("note", { name: "Comparison assumptions" }).textContent).toContain("SNAP");
+    expect(screen.getByRole("note", { name: "Comparison assumptions" }).textContent).toContain("US calculations use PolicyEngine US");
     const layout = readFileSync(`${process.cwd()}/app/layout.jsx`, "utf8");
     const sharedHeader = readFileSync(`${process.cwd()}/app/components/SiteHeader.jsx`, "utf8");
-    expect(layout + sharedHeader).not.toMatch(/shared resource unit|keeping up the home|livingArrangement/);
+    expect(layout + sharedHeader).not.toMatch(/shared resource unit|keeping up the home|livingArrangement|US calculations use|1\.824\.1/);
   });
 
   it("discloses the Medicaid parent limitation only for cohabiting parents", () => {

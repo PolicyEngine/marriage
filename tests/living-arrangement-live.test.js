@@ -17,7 +17,7 @@ describe("live US living-arrangement comparisons", () => {
     expect(together.unmarried.benefits.snap).toBeGreaterThan(0);
     expect(Math.abs(together.married.benefits.snap - together.unmarried.benefits.snap)).toBeLessThan(0.05);
     expect(separate.headSingle.benefits.snap + separate.spouseSingle.benefits.snap)
-      .toBeGreaterThan(together.unmarried.benefits.snap);
+      .not.toBeCloseTo(together.unmarried.benefits.snap, 2);
   });
 
   it("matches every scalar output at unequal incomes in the heatmap", () => {

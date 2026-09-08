@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSituation, getCategorizedPrograms, getHeatmapData, buildCellResults, buildCellBreakdown } from "../lib/api";
 import { computeTableData, unmarriedTotal } from "../lib/utils";
+import metadata from "../lib/metadata.json";
 
 const extras = { livingArrangement: "cohabiting" };
 const situation = (options = extras) => createSituation(
@@ -25,6 +26,9 @@ function mockApi() {
         for (const [variable, periods] of Object.entries(entity)) {
           if (periods?.["2026"] !== null) continue;
           periods["2026"] = Array.from({ length }, (_, apiIdx) => {
+            // These fixtures contain no paid care. Preserve that premise when
+            // the API also requests childcare costs and assistance outputs.
+            if (["childcare_expenses", "child_care_subsidies", "vt_ccfap_family_share"].includes(variable)) return 0;
             // API axes are first-axis-fastest; the UI's storage is head-major.
             const idx = s.axes?.length === 2
               ? (apiIdx % count) * count + Math.floor(apiIdx / count) : apiIdx;
@@ -34,7 +38,7 @@ function mockApi() {
         }
       });
     }
-    return { ok: true, json: async () => ({ result: s }) };
+    return { ok: true, json: async () => ({ result: s, model_version: metadata.modelVersion }) };
   }));
   return requests;
 }

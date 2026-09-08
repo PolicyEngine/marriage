@@ -24,6 +24,7 @@ const config = [
       "out/**",
       "build/**",
       "coverage/**",
+      "**/.venv/**",
       "next-env.d.ts",
     ],
   },

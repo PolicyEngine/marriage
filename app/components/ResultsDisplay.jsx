@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, Suspense, lazy } from "react";
-import { computeTableData, unmarriedTotal, PROGRAM_DESCRIPTIONS } from "@/lib/utils";
+import { computeTableData, unmarriedTotal, PROGRAM_DESCRIPTIONS, formatCurrency } from "@/lib/utils";
 import { buildCellResults, buildCellBreakdown } from "@/lib/api";
 import MetricCards from "./MetricCards";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@policyengine/ui-kit/primitives";
@@ -338,6 +338,16 @@ export default function ResultsDisplay({
           </div>
         )}
       </div>
+      {countryId === "us" && activeResults.married.childcare && (hasChildren || activeResults.married.childcare.earlyHeadStartEligible > 0 || unmarriedTotal(activeResults, "childcare", "earlyHeadStartEligible") > 0) && (
+        <section className="px-5 py-4 border-t border-border" aria-label="Childcare and early education">
+          <h3 className="text-base font-semibold text-foreground mb-2">Childcare and early education</h3>
+          <EarlyEducationTable results={activeResults} unmarriedLabel={unmarriedLabel} />
+          <p className="text-sm text-muted-foreground mt-3">
+            Eligibility estimates do not guarantee an available place. Head Start service values are based on state spending per enrollee and are {activeResults.married.childcare.includeHeadStart ? "included in" : "excluded from"} the income and benefits totals.
+            {activeResults.married.childcare.enabled && " Benefits include the reduction in family childcare spending once. Care charges, including required family contributions, are deducted once from income. State payments to providers are shown separately because they can exceed the family's price. Paid care excludes free Head Start hours. Vermont estimates assume providers collect the modeled family share."}
+          </p>
+        </section>
+      )}
       {countryId === "us" && (
         <p className="comparison-assumptions" role="note" aria-label="Comparison assumptions">
           {cohabiting
@@ -347,8 +357,39 @@ export default function ResultsDisplay({
             ? " Children are assumed to be both adults' children; the adult labeled You claims them and pays more than half the cost of keeping up the home."
             : " All children are assumed to be both adults' children and live with the adult labeled You.")}
           {cohabiting && hasChildren && " Medicaid estimates use simplified parent/caretaker rules and may misstate eligibility for unmarried parents living together."}
+          {" US calculations use PolicyEngine US " + country.metadata.modelVersion + "."}
         </p>
       )}
     </div>
   );
+}
+
+function EarlyEducationTable({ results, unmarriedLabel }) {
+  const married = results.married.childcare;
+  const singles = results.unmarried ? [results.unmarried.childcare]
+    : [results.headSingle.childcare, results.spouseSingle.childcare];
+  const labels = [
+    ...(married.enabled ? [
+      ["Gross childcare costs", "grossCost", true],
+      ["Childcare assistance (CCDF)", "subsidy", true],
+      ["State payment to childcare provider", "providerPayment", true],
+      ...(married.familyShare > 0 || singles.some(result => result?.familyShare > 0)
+        ? [["Required family share", "familyShare", true]] : []),
+      ["Out-of-pocket childcare costs", "outOfPocket", true],
+    ] : []),
+    ["Children eligible for Head Start", "headStartEligible", false],
+    ["People eligible for Early Head Start", "earlyHeadStartEligible", false],
+    ["Head Start (service value)", "headStartValue", true],
+    ["Early Head Start (service value)", "earlyHeadStartValue", true],
+  ];
+  return <div className="table-scroll" tabIndex={0} role="region" aria-label="Childcare comparison">
+    <table className="data-table">
+      <thead><tr><th></th><th>{unmarriedLabel}</th><th>Married</th></tr></thead>
+      <tbody>{labels.map(([label, key, money]) => {
+        const unmarried = singles.reduce((sum, result) => sum + (result?.[key] || 0), 0);
+        const format = value => money ? formatCurrency(value) : String(value);
+        return <tr key={key}><td className="row-label">{label}</td><td>{format(unmarried)}</td><td>{format(married[key] || 0)}</td></tr>;
+      })}</tbody>
+    </table>
+  </div>;
 }

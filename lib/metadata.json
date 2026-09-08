@@ -1,4 +1,5 @@
 {
+  "modelVersion": "1.824.1",
   "benefits": [
     {
       "variable": "social_security",
@@ -61,6 +62,31 @@
       "label": "unemployment compensation"
     },
     {
+      "variable": "child_support_received",
+      "entity": "person",
+      "label": "Child support receipt"
+    },
+    {
+      "variable": "workers_compensation",
+      "entity": "person",
+      "label": "worker's compensation"
+    },
+    {
+      "variable": "educational_assistance",
+      "entity": "person",
+      "label": "educational assistance"
+    },
+    {
+      "variable": "financial_assistance",
+      "entity": "person",
+      "label": "financial assistance"
+    },
+    {
+      "variable": "survivor_benefits",
+      "entity": "person",
+      "label": "survivor benefits"
+    },
+    {
       "variable": "head_start",
       "entity": "person",
       "label": "Head Start"
@@ -89,6 +115,11 @@
       "variable": "commodity_supplemental_food_program",
       "entity": "person",
       "label": "Commodity Supplemental Food Program"
+    },
+    {
+      "variable": "child_care_subsidies",
+      "entity": "spm_unit",
+      "label": "Child care subsidies"
     }
   ],
   "credits": [
@@ -177,6 +208,11 @@
       "label": "Assigned ACA premium tax credit for tax unit"
     },
     {
+      "variable": "assigned_ca_premium_subsidy",
+      "entity": "tax_unit",
+      "label": "Assigned California Premium Subsidy for tax unit"
+    },
+    {
       "variable": "basic_health_program",
       "entity": "tax_unit",
       "label": "Basic Health Program"
@@ -187,9 +223,49 @@
       "label": "Colorado OmniSalud premium subsidy"
     },
     {
+      "variable": "assigned_co_premium_assistance",
+      "entity": "tax_unit",
+      "label": "Assigned Colorado Premium Assistance"
+    },
+    {
+      "variable": "ct_covered_connecticut",
+      "entity": "tax_unit",
+      "label": "Covered Connecticut Program premium assistance"
+    },
+    {
+      "variable": "ma_connector_care",
+      "entity": "tax_unit",
+      "label": "Massachusetts ConnectorCare"
+    },
+    {
+      "variable": "md_premium_assistance",
+      "entity": "tax_unit",
+      "label": "Maryland Premium Assistance"
+    },
+    {
+      "variable": "nj_njhps",
+      "entity": "tax_unit",
+      "label": "New Jersey Health Plan Savings"
+    },
+    {
+      "variable": "assigned_nm_premium_assistance",
+      "entity": "tax_unit",
+      "label": "Assigned New Mexico Premium Assistance for tax unit"
+    },
+    {
       "variable": "or_healthier_oregon_cost",
       "entity": "person",
       "label": "Oregon Healthier Oregon benefit cost"
+    },
+    {
+      "variable": "vt_premium_assistance",
+      "entity": "tax_unit",
+      "label": "Vermont Premium Assistance"
+    },
+    {
+      "variable": "wa_cascade_care_savings",
+      "entity": "tax_unit",
+      "label": "Washington Cascade Care Savings"
     }
   ],
   "stateCredits": [
@@ -256,11 +332,6 @@
         "label": "Colorado Low-income Child Care Expenses Credit"
       },
       {
-        "variable": "co_income_qualified_senior_housing_credit",
-        "entity": "tax_unit",
-        "label": "Colorado Income Qualified Senior Housing Income Tax Credit"
-      },
-      {
         "variable": "co_eitc",
         "entity": "tax_unit",
         "label": "Colorado EITC"
@@ -310,6 +381,13 @@
         "variable": "de_refundable_eitc",
         "entity": "tax_unit",
         "label": "Delaware refundable EITC"
+      }
+    ],
+    "GA": [
+      {
+        "variable": "ga_surplus_tax_rebate",
+        "entity": "tax_unit",
+        "label": "Georgia surplus tax rebate"
       }
     ],
     "HI": [
@@ -699,9 +777,9 @@
     ],
     "RI": [
       {
-        "variable": "ri_eitc",
+        "variable": "ri_refundable_eitc",
         "entity": "tax_unit",
-        "label": "Rhode Island earned income tax credit"
+        "label": "Rhode Island refundable earned income tax credit"
       },
       {
         "variable": "ri_property_tax_credit",
