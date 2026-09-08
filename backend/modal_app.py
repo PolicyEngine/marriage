@@ -18,18 +18,20 @@ image = (
 @app.cls(
     image=image,
     cpu=2,
-    memory=4096,
+    memory=8192,
     timeout=120,
+    min_containers=1,
     max_containers=8,
-    scaledown_window=60,
+    scaledown_window=300,
     enable_memory_snapshot=True,
 )
-@modal.concurrent(max_inputs=1)
+@modal.concurrent(max_inputs=3)
 class HouseholdAPI:
     @modal.enter(snap=True)
     def load_model(self):
         # Snapshot both accounting variants and metadata; no population data is
-        # needed. Containers scale to zero, restoring the loaded model on demand.
+        # needed. Keep one worker warm so browser preflights and the three
+        # comparison scenarios can reuse the loaded model without a cold start.
         from backend.simulation import build_metadata, get_system
 
         get_system(False)
