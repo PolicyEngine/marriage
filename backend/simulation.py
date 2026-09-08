@@ -11,6 +11,7 @@ from copy import deepcopy
 from functools import lru_cache
 from importlib.metadata import version
 
+import numpy as np
 from policyengine_core.parameters import Parameter
 from policyengine_core.reforms import Reform
 from policyengine_us import Simulation
@@ -206,6 +207,38 @@ def _filter_vermont_participation(simulation, household, year):
         simulation.set_input("vt_ccfap_eligible_child", period, mask)
     # The pinned core preserves explicit inputs, including our full monthly
     # vectors, while purging all dependent formula outputs computed above.
+    simulation._invalidate_all_caches()
+    _apply_vermont_family_share(simulation, year)
+
+
+def _apply_vermont_family_share(simulation, year):
+    """Carry collected family shares into actual childcare expense deductions.
+
+    Vermont pays the provider its state rate even above the provider's price;
+    that does not waive the family's collectible share. This app assumes the
+    provider collects that share. See the below-state-rate example on page 2:
+    https://outside.vermont.gov/dept/DCF/Shared%20Documents/CDD/CCFAP/CCFAP-Understanding-Payments.pdf
+    """
+    # Respect the app's explicit zero on this final state aggregate when no
+    # funded place is available; its underlying vt_ccfap formula can still be
+    # positive. Family-share policy and period conversion remain model-owned.
+    has_funding = simulation.calculate("vt_child_care_subsidies", year) > 0
+    annual_expenses = np.zeros_like(has_funding, dtype=float)
+    for month in range(1, 13):
+        period = f"{year}-{month:02}"
+        gross = simulation.calculate(
+            "pre_subsidy_childcare_expenses", period, map_to="spm_unit"
+        )
+        payment = np.where(has_funding, simulation.calculate("vt_ccfap", period), 0)
+        family_share = simulation.calculate("vt_ccfap_family_share", period)
+        annual_expenses += np.maximum(
+            np.maximum(gross - payment, 0),
+            np.where((payment > 0) & (gross > 0), family_share, 0),
+        )
+    # childcare_expenses is YEAR-defined. Sum the twelve model-period amounts
+    # before setting its complete SPM vector, including replicated axis units.
+    # SNAP and the tax-unit CDCC expense allocation then consume the same cost.
+    simulation.set_input("childcare_expenses", year, annual_expenses)
     simulation._invalidate_all_caches()
 
 

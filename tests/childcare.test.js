@@ -53,6 +53,20 @@ describe("childcare inputs and accounting", () => {
     expect(data.head_start_service_value[0]).toBe(20000);
     expect(data.childcare_out_of_pocket[0]).toBe(6000);
   });
+
+  it("separates provider reimbursement from household assistance and collectible copays", () => {
+    const data = { child_care_subsidies: [18564, 0, 18564], childcare_expenses: [2600, 13000, 15000],
+      vt_ccfap_family_share: [2600, 2600, 15000], household_state_benefits: [0, 0, 0],
+      household_benefits: [1000, 1000, 1000], household_net_income: [50000, 50000, 50000],
+      household_net_income_including_health_benefits: [55000, 55000, 55000] };
+    normalizeUSChildcare(data, "VT", 13000, {});
+    expect(data.childcare_provider_payment).toEqual([18564, 0, 18564]);
+    expect(data.child_care_subsidies).toEqual([10400, 0, 0]);
+    expect(data.childcare_out_of_pocket).toEqual([2600, 13000, 15000]);
+    expect(data.childcare_family_share).toEqual([2600, 0, 15000]);
+    expect(data.household_net_income).toEqual([47400, 37000, 35000]);
+    expect(data.childcare_cost_deducted).toEqual([13000, 13000, 15000]);
+  });
 });
 
 describe("current runtime childcare regressions", () => {
@@ -122,8 +136,22 @@ describe("current runtime childcare regressions", () => {
     const r = await getPrograms("us", "VT", 20000, {}, 15000, [child("VT"), { age: 3, childcareCost: 0 }], "2026", {}, 40, 40, {}, false, e);
     // The model pays its state rate even above a provider's entered charges.
     // This family has one participating child, not two subsidized places.
-    expect(r.childcare.subsidy).toBeGreaterThan(12000);
-    expect(r.childcare.subsidy).toBeLessThan(30000);
+    expect(r.childcare.providerPayment).toBeGreaterThan(12000);
+    expect(r.childcare.providerPayment).toBeLessThan(30000);
+    expect(r.childcare.subsidy).toBe(12000);
     expect(r.childcare.outOfPocket).toBe(0);
+  }, 60000);
+
+  it("retains Vermont's family share even when state payments exceed the price", async () => {
+    const care = { ...child("VT"), age: 1, childcareCost: 13000,
+      childcareProviders: { vt_ccfap_provider_type: "REGISTERED_HOME" } };
+    const r = await getPrograms("us", "VT", 25000, {}, 25000, [care], "2026", {}, 40, 40, {}, false,
+      { ...extras("VT"), childcareWorkHours: { head: 40, spouse: 40 } });
+    expect(r.childcare.providerPayment).toBeCloseTo(18564, 1);
+    expect(r.childcare.familyShare).toBeCloseTo(2600, 1);
+    expect(r.childcare.outOfPocket).toBeCloseTo(2600, 1);
+    expect(r.childcare.subsidy).toBeCloseTo(10400, 1);
+    expect(Object.values(r.benefits).reduce((sum, value) => sum + value, 0)).toBeCloseTo(r.aggregates.householdBenefits, 1);
+    expect(r.aggregates.childcareCostDeducted).toBeCloseTo(13000, 1);
   }, 60000);
 });

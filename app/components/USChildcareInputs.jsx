@@ -83,14 +83,21 @@ export default function USChildcareInputs({
   const counties = childcareCounties(regionCode);
   const providers = childcareMetadata.states[state]?.providers || [];
   const paidCare = childEntries.some((child) => Number(child.childcareCost) > 0);
-  const nondefaultWorkHours = Number(childcareWorkHours.head) !== 40 || Number(childcareWorkHours.spouse) !== 40;
   const providerLabel = (index) => state === "AR" ? "Care type" : `Provider type${providers.length > 1 ? ` ${index + 1}` : ""}`;
   return (
     <div className="sf-group sf-us-childcare">
-      <div className="sf-group-title">Childcare and early learning</div>
+      <div className="sf-group-title">Work, childcare and early learning</div>
+      <p className="sf-input-note">Weekly work hours default to 40 for each adult. Adjust these to match your work schedule. They stay fixed across the income grid and may affect other benefits as well as childcare assistance.</p>
+      <div className="sf-row">
+        <NumberField id="childcare-work-head" label="Your work hours / week" max="168"
+          value={childcareWorkHours.head} onChange={(head) => onWorkHoursChange({ ...childcareWorkHours, head })} />
+        <NumberField id="childcare-work-spouse" label="Partner’s work hours / week" max="168"
+          value={childcareWorkHours.spouse} onChange={(spouse) => onWorkHoursChange({ ...childcareWorkHours, spouse })} />
+      </div>
+
       <Toggle label="Assume a funded childcare slot" checked={ccdfSlotAvailable} onChange={onCcdfSlotAvailableChange} />
       <p className="sf-input-note">Assumes a funded place is available if you otherwise qualify for childcare assistance, rather than being on a waiting list. Without a funded slot, you still pay the childcare costs entered.</p>
-      {(childEntries.length > 0 || childcareCounty || nondefaultWorkHours) && (
+      {(childEntries.length > 0 || childcareCounty) && (
         <div className="sf-childcare-fields">
           {(childEntries.length > 0 || childcareCounty) && <div className="sf-field">
             <label htmlFor="childcare-county">County</label>
@@ -99,15 +106,7 @@ export default function USChildcareInputs({
               onValueChange={(value) => onCountyChange(value === "__choose__" ? "" : value)}
               options={[{ value: "__choose__", label: "Choose a county" }, ...counties]} />
           </div>}
-          {(paidCare || nondefaultWorkHours) && <>
-          <p className="sf-input-note">Weekly work hours default to 40 for each adult. Adjust these to match your work schedule. They stay fixed across the income grid and may affect other benefits as well as childcare assistance.</p>
-          <div className="sf-row">
-            <NumberField id="childcare-work-head" label="Your work hours / week" max="168"
-              value={childcareWorkHours.head} onChange={(head) => onWorkHoursChange({ ...childcareWorkHours, head })} />
-            <NumberField id="childcare-work-spouse" label="Partner’s work hours / week" max="168"
-              value={childcareWorkHours.spouse} onChange={(spouse) => onWorkHoursChange({ ...childcareWorkHours, spouse })} />
-          </div>
-          </>}
+
           {state === "NV" && paidCare && ccdfSlotAvailable && (
             <div>
               <Toggle label="Meets childcare work or activity requirements"

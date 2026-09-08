@@ -41,12 +41,15 @@ The calculator covers all 50 states and DC, with county, provider, attendance,
 and parent work inputs. Children and their care costs remain with the first
 adult in the separate-household comparison.
 
-CCDF is counted once: its contribution already included in state benefits is
-removed from that breakdown row, while missing state contributions are added
-to household benefits and net income. Gross care costs are then deducted once.
-Out-of-pocket cost is gross cost minus the model subsidy, floored at zero;
-provider payments can exceed entered charges under some state rules. This is
-not labeled as a statutory copayment. Initial-applicant, standard-quality,
+CCDF is counted once as the reduction in family childcare spending. State
+payments already in aggregate benefits are replaced by that household benefit;
+full provider payments remain visible separately. Care costs are deducted once,
+so the net effect on income is the family's modeled out-of-pocket cost.
+Vermont assumes providers collect the model-computed family share, even when
+state payments exceed the entered price. The runtime preserves that expense
+in affected tax and benefit deductions. Work hours remain editable for every
+US household because they can affect benefits beyond childcare.
+Initial-applicant, standard-quality,
 zero-assets and available-funding assumptions apply unless an input says otherwise.
 
 Head Start and Early Head Start eligibility are shown separately from their

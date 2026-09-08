@@ -44,6 +44,15 @@ never forces an ineligible child eligible. The flag changes only simulation
 inputs, not shared model definitions. Explicit Vermont child eligibility inputs
 are rejected when this filter is enabled.
 
+The same Vermont adapter assumes providers collect the model-computed family
+share. For each month, actual childcare expense is the larger of zero, gross
+price less the provider payment, and the collectible family share when a funded
+payment and positive paid-care expenses exist. The adapter sums those amounts
+into the model's annual `childcare_expenses` input, so SNAP deductions and CDCC
+expense allocation use the corrected cost. Raw provider payments and the
+model's `vt_ccfap_family_share` remain unchanged outputs. A zero final state
+payment for an unavailable funded place preserves the family's gross expenses.
+
 `GET /us/metadata` exposes all variables and the parameter values needed to
 resolve aggregate composition. `?full=true` additionally exposes documentation
 and all scalar parameters. `GET /health` returns the pinned model version.

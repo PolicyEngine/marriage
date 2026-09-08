@@ -291,3 +291,20 @@ it("shares an unavailable funded slot while preserving care costs and accepts ol
   window.history.replaceState(null, "", "#region=CA&head=0&spouse=0&ccdf=1");
   expect(decodeFromHash()).toMatchObject({ ccdfSlotAvailable: true });
 });
+
+
+it("exposes both adults' work hours without children or paid care and preserves zero hours on submission", () => {
+  const onCalculate = vi.fn();
+  const onInputChange = vi.fn();
+  render(<InputForm {...props} onCalculate={onCalculate} onInputChange={onInputChange} />);
+  openDetails();
+  expect(screen.getByLabelText("Your work hours / week").value).toBe("40");
+  expect(screen.getByLabelText("Partner’s work hours / week").value).toBe("40");
+  expect(screen.getByText(/may affect other benefits as well as childcare assistance/)).toBeTruthy();
+  expect(screen.queryByLabelText("Child 1 annual childcare price ($)")).toBeNull();
+  fireEvent.change(screen.getByLabelText("Your work hours / week"), { target: { value: "0" } });
+  fireEvent.change(screen.getByLabelText("Partner’s work hours / week"), { target: { value: "0" } });
+  expect(onInputChange).toHaveBeenCalledTimes(2);
+  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+  expect(onCalculate.mock.calls[0][0]).toMatchObject({ children: [], childcareWorkHours: { head: 0, spouse: 0 }, ccdfSlotAvailable: true });
+});

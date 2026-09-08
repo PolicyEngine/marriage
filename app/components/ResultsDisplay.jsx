@@ -344,7 +344,7 @@ export default function ResultsDisplay({
           <EarlyEducationTable results={activeResults} unmarriedLabel={unmarriedLabel} />
           <p className="text-sm text-muted-foreground mt-3">
             Eligibility estimates do not guarantee an available place. Head Start service values are based on state spending per enrollee and are {activeResults.married.childcare.includeHeadStart ? "included in" : "excluded from"} the income and benefits totals.
-            {activeResults.married.childcare.enabled && " Childcare assistance is already counted once in benefits; gross paid-care costs are deducted once from income. Paid care excludes free Head Start hours. Out-of-pocket cost is the amount entered minus the modeled subsidy, floored at zero."}
+            {activeResults.married.childcare.enabled && " Benefits include the reduction in family childcare spending once. Care charges, including required family contributions, are deducted once from income. State payments to providers are shown separately because they can exceed the family's price. Paid care excludes free Head Start hours. Vermont estimates assume providers collect the modeled family share."}
           </p>
         </section>
       )}
@@ -372,6 +372,9 @@ function EarlyEducationTable({ results, unmarriedLabel }) {
     ...(married.enabled ? [
       ["Gross childcare costs", "grossCost", true],
       ["Childcare assistance (CCDF)", "subsidy", true],
+      ["State payment to childcare provider", "providerPayment", true],
+      ...(married.familyShare > 0 || singles.some(result => result?.familyShare > 0)
+        ? [["Required family share", "familyShare", true]] : []),
       ["Out-of-pocket childcare costs", "outOfPocket", true],
     ] : []),
     ["Children eligible for Head Start", "headStartEligible", false],
