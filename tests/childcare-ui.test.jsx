@@ -114,17 +114,17 @@ it("resets US childcare options when switching countries", () => {
   rerender(<InputForm {...props} />);
   openDetails();
   expect(screen.getByRole("checkbox", { name: "Assume a funded childcare slot" }).checked).toBe(true);
-  expect(screen.getByRole("checkbox", { name: "Include Head Start service values" }).checked).toBe(false);
+  expect(screen.queryByRole("checkbox", { name: "Include Head Start service values" })).toBeNull();
 });
 
-it("allows Head Start values independently of CCDF and explains the service valuation", () => {
+it("explains separate Head Start service values without an accounting toggle", () => {
   const onCalculate = vi.fn();
   render(<InputForm {...props} onCalculate={onCalculate} />);
   openDetails();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Include Head Start service values" }));
+  expect(screen.queryByRole("checkbox", { name: "Include Head Start service values" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
-  expect(onCalculate.mock.calls[0][0]).toMatchObject({ includeHeadStart: true, ccdfSlotAvailable: true });
-  expect(screen.getByText(/These are in-kind services, not cash payments/)).toBeTruthy();
+  expect(onCalculate.mock.calls[0][0]).toMatchObject({ ccdfSlotAvailable: true });
+  expect(screen.getByText(/service values appear separately from financial resources/)).toBeTruthy();
 });
 
 describe("childcare shares", () => {

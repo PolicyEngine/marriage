@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  buildCellResults, buildCellBreakdown, createSituation, deductRent,
+  buildCellResults, buildCellBreakdown, createSituation,
 } from "../lib/api.js";
 import { computeTableData } from "../lib/utils.js";
 import { COUNTRIES, DEFAULT_COUNTRY, LEGACY_HASH_COUNTRY, UK_BRMAS, DEFAULT_BRMA } from "../lib/countries.js";
@@ -25,12 +25,14 @@ function series(marriedAt11, headAt1, spouseAt1) {
 
 describe("C1: selecting a heatmap cell keeps the rent deduction", () => {
   const programData = {
-    household_net_income: series(40000, 22500, 22500),
+    household_net_income: series(28000, 10500, 10500),
+    financial_resources: series(28000, 10500, 10500),
+    rent_deducted: series(12000, 12000, 12000),
     household_benefits: series(0, 0, 0),
     household_tax: series(0, 0, 0),
   };
 
-  it("subtracts rent from every scenario, as the grid does", () => {
+  it("preserves the backend rent deduction in every scenario", () => {
     const withRent = buildCellResults("uk", programData, 1, 1, COUNT, [], RENT);
     expect(withRent.married.aggregates.householdNetIncome).toBe(40000 - 12000);
     // Each separate household pays its own rent.
@@ -52,14 +54,12 @@ describe("C1: selecting a heatmap cell keeps the rent deduction", () => {
     expect(apart - together).toBe(gridApart - gridTogether);
   });
 
-  it("leaves owners and the US untouched", () => {
-    const owner = buildCellResults("uk", programData, 1, 1, COUNT, [], {
-      rent: 12000, tenureType: "OWNED_OUTRIGHT",
-    });
-    expect(owner.married.aggregates.householdNetIncome).toBe(40000);
-    const none = buildCellResults("uk", programData, 1, 1, COUNT, [], {});
-    expect(none.married.aggregates.householdNetIncome).toBe(40000);
+  it("does not recalculate housing accounting from display extras", () => {
+    const cell = buildCellResults("uk", programData, 1, 1, COUNT, [], {});
+    expect(cell.married.aggregates.householdNetIncome).toBe(28000);
+    expect(cell.married.aggregates.rentDeducted).toBe(12000);
   });
+
 });
 
 describe("C2: share links keep their country", () => {

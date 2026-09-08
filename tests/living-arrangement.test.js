@@ -38,7 +38,27 @@ function mockApi() {
         }
       });
     }
-    return { ok: true, json: async () => ({ result: s, model_version: metadata.modelVersion }) };
+    const series = {};
+    for (const [container, entities] of Object.entries(s)) {
+      if (container === "axes") continue;
+      for (const entity of Object.values(entities)) {
+        for (const [variable, periods] of Object.entries(entity)) {
+          const values = periods?.["2026"];
+          if (!Array.isArray(values)) continue;
+          const total = series[variable] ||= new Array(length).fill(0);
+          values.forEach((value, i) => total[i] += value);
+        }
+      }
+    }
+    for (const variable of ["childcare_gross_cost", "childcare_out_of_pocket", "childcare_cost_deducted",
+      "childcare_provider_payment", "childcare_family_share", "head_start_service_value", "early_head_start_service_value",
+      "household_market_income", "household_health_costs"]) series[variable] = new Array(length).fill(0);
+    series.financial_resources = [...series.household_net_income];
+    series.healthcare_service_value = [...series.healthcare_benefit_value];
+    series.early_education_service_value = new Array(length).fill(0);
+    series.combined_resources = series.financial_resources.map((v, i) => v + series.healthcare_service_value[i]);
+    return { ok: true, json: async () => ({ result: s, model_version: metadata.modelVersion,
+      accounting: {version: 1, axis_order: "first_axis_fastest", series} }) };
   }));
   return requests;
 }
@@ -93,7 +113,9 @@ describe("cohabiting comparison", () => {
     const r = await getCategorizedPrograms("us", "CA", 20000, 10000, [], {}, "2026", {}, 40, 40, {}, false, extras);
     expect(unmarriedTotal(r, "credits", "eitc")).toBe(300);
     r.married.aggregates.householdNetIncome = 89352.69;
+    r.married.aggregates.financialResources = 89352.69;
     r.unmarried.aggregates.householdNetIncome = 90554.33;
+    r.unmarried.aggregates.financialResources = 90554.33;
     expect(computeTableData(r, "summary")[0].delta).toBe("-$1,202");
     for (const tab of ["summary", "benefits", "credits", "taxes"]) {
       const rows = computeTableData(r, tab);

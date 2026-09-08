@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, Suspense, lazy } from "react";
-import { computeTableData, unmarriedTotal, PROGRAM_DESCRIPTIONS, formatCurrency } from "@/lib/utils";
+import { computeTableData, unmarriedTotal, PROGRAM_DESCRIPTIONS, formatCurrency, resourceValues } from "@/lib/utils";
 import { buildCellResults, buildCellBreakdown } from "@/lib/api";
 import MetricCards from "./MetricCards";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@policyengine/ui-kit/primitives";
@@ -19,7 +19,7 @@ const UK_HEATMAP_OVERRIDES = {
   taxes: "tax",
 };
 
-function DataTable({ rows, emptyMessage, unmarriedLabel = "Not married", countryId }) {
+function DataTable({ rows, emptyMessage, unmarriedLabel = "Not married", countryId, regionLabel = "Tax and benefit comparison" }) {
   if (rows.length === 0) {
     return <p className="loading">{emptyMessage || "No data to display."}</p>;
   }
@@ -46,7 +46,7 @@ function DataTable({ rows, emptyMessage, unmarriedLabel = "Not married", country
 
   return (
     <TooltipProvider>
-    <div className="table-scroll" tabIndex={0} role="region" aria-label="Tax and benefit comparison">
+    <div className="table-scroll" tabIndex={0} role="region" aria-label={regionLabel}>
       <table className="data-table">
         <thead>
           <tr>
@@ -94,6 +94,8 @@ export default function ResultsDisplay({
   results,
   heatmapData,
   heatmapLoading,
+  heatmapError,
+  onRetryHeatmap,
   headIncome,
   spouseIncome,
   valentine,
@@ -103,7 +105,7 @@ export default function ResultsDisplay({
   livingArrangement,
   hasChildren = false,
 }) {
-  const showHealth = !esiStatus?.head && !esiStatus?.spouse;
+  const showHealth = country.id !== "us" && !esiStatus?.head && !esiStatus?.spouse;
   const [activeTab, setActiveTab] = useState("summary");
   const [viewMode, setViewMode] = useState("table");
   const [cellSelection, setCellSelection] = useState(null);
@@ -143,7 +145,7 @@ export default function ResultsDisplay({
   const activeResults = cellResults || results;
 
   const currentTab = visibleTabs.find((t) => t.key === activeTab) || visibleTabs[0];
-  const rows = computeTableData(activeResults, activeTab, { showHealth, currencySymbol: sym });
+  const rows = computeTableData(activeResults, activeTab, { showHealth, currencySymbol: sym, countryId });
 
   const EMPTY_MESSAGES = {
     summary: "No data available for this scenario.",
@@ -153,39 +155,13 @@ export default function ResultsDisplay({
   };
 
   // Resolve heatmap key — use UK overrides if applicable
-  let heatmapKey = UK_HEATMAP_OVERRIDES[activeTab] && countryId === "uk"
+  const heatmapKey = UK_HEATMAP_OVERRIDES[activeTab] && countryId === "uk"
     ? UK_HEATMAP_OVERRIDES[activeTab]
     : currentTab.heatmapKey;
-  if (showHealth && activeTab === "summary" && countryId === "us") {
-    heatmapKey = "net income (with healthcare)";
-  }
-
-  // For benefits tab with healthcare, combine grids element-wise
-  let heatmapGrid = heatmapData?.grids?.[heatmapKey] || null;
-  let combinedHeadLine = heatmapData?.headLines?.[heatmapKey];
-  let combinedSpouseLine = heatmapData?.spouseLines?.[heatmapKey];
-  let unmarriedGrid = heatmapData?.unmarriedGrids?.[heatmapKey];
-
-  if (showHealth && activeTab === "benefits" && heatmapData?.grids && countryId === "us") {
-    const benefitsGrid = heatmapData.grids["benefits"];
-    const healthGrid = heatmapData.grids["healthcare benefits"];
-    if (benefitsGrid && healthGrid) {
-      heatmapGrid = benefitsGrid.map((row, i) =>
-        row.map((val, j) => val + (healthGrid[i]?.[j] || 0)),
-      );
-    }
-    const bHead = heatmapData.headLines?.["benefits"];
-    const hHead = heatmapData.headLines?.["healthcare benefits"];
-    if (bHead && hHead) combinedHeadLine = bHead.map((v, i) => v + (hHead[i] || 0));
-    const bSpouse = heatmapData.spouseLines?.["benefits"];
-    const hSpouse = heatmapData.spouseLines?.["healthcare benefits"];
-    if (bSpouse && hSpouse) combinedSpouseLine = bSpouse.map((v, i) => v + (hSpouse[i] || 0));
-    const bUnmarried = heatmapData.unmarriedGrids?.["benefits"];
-    const hUnmarried = heatmapData.unmarriedGrids?.["healthcare benefits"];
-    if (bUnmarried && hUnmarried) {
-      unmarriedGrid = bUnmarried.map((row, i) => row.map((v, j) => v + (hUnmarried[i]?.[j] || 0)));
-    }
-  }
+  const heatmapGrid = heatmapData?.grids?.[heatmapKey] || null;
+  const combinedHeadLine = heatmapData?.headLines?.[heatmapKey];
+  const combinedSpouseLine = heatmapData?.spouseLines?.[heatmapKey];
+  const unmarriedGrid = heatmapData?.unmarriedGrids?.[heatmapKey];
 
   const HEATMAP_AGG = {
     "net income": "householdNetIncome",
@@ -197,12 +173,7 @@ export default function ResultsDisplay({
   };
   const aggKey = HEATMAP_AGG[heatmapKey];
   let markerDelta = null;
-  if (activeTab === "benefits" && showHealth && countryId === "us") {
-    const m = (activeResults.married.aggregates.householdBenefits || 0) + (activeResults.married.aggregates.healthcareBenefitValue || 0);
-    const unmarried = unmarriedTotal(activeResults, "aggregates", "householdBenefits")
-      + unmarriedTotal(activeResults, "aggregates", "healthcareBenefitValue");
-    markerDelta = m - unmarried;
-  } else if (aggKey) {
+  if (aggKey) {
     const m = activeResults.married.aggregates[aggKey] || 0;
     markerDelta = m - unmarriedTotal(activeResults, "aggregates", aggKey);
     if (heatmapKey === "tax before refundable credits" || heatmapKey === "tax") {
@@ -218,9 +189,8 @@ export default function ResultsDisplay({
     }
   }
 
-  let heatmapLabel = heatmapKey;
-  if (heatmapKey === "net income (with healthcare)") heatmapLabel = "net income";
-  if (showHealth && activeTab === "benefits" && countryId === "us") heatmapLabel = "benefits";
+  const heatmapLabel = countryId === "us" && activeTab === "summary"
+    ? "household financial resources" : heatmapKey;
 
   // Check if the active heatmap key corresponds to an inverted variable (e.g. taxes)
   const heatmapInvertDelta = country.gridConfig?.some(
@@ -275,6 +245,12 @@ export default function ResultsDisplay({
       <span className="spinner" />
       Loading heatmap...
     </p>
+  ) : heatmapError ? (
+    <div className="heatmap-recovery" role="alert">
+      <p>{heatmapError}</p>
+      <p>Your calculated household results are still available in the table.</p>
+      {onRetryHeatmap && <button className="share-btn" onClick={onRetryHeatmap}>Retry heatmap</button>}
+    </div>
   ) : heatmapProps ? (
     <Suspense
       fallback={
@@ -300,6 +276,7 @@ export default function ResultsDisplay({
         countryId={countryId}
         livingArrangement={livingArrangement || (cohabiting ? "cohabiting" : "separate")}
       />
+      {countryId === "us" && <ServiceValueComparison results={activeResults} unmarriedLabel={unmarriedLabel} />}
       <nav className="tab-bar" aria-label="Result categories">
         {visibleTabs.map((tab) => (
           <button
@@ -337,13 +314,14 @@ export default function ResultsDisplay({
             {heatmapContent}
           </div>
         )}
+        {viewMode === "table" && heatmapError && !heatmapLoading && heatmapContent}
       </div>
       {countryId === "us" && activeResults.married.childcare && (hasChildren || activeResults.married.childcare.earlyHeadStartEligible > 0 || unmarriedTotal(activeResults, "childcare", "earlyHeadStartEligible") > 0) && (
         <section className="px-5 py-4 border-t border-border" aria-label="Childcare and early education">
           <h3 className="text-base font-semibold text-foreground mb-2">Childcare and early education</h3>
           <EarlyEducationTable results={activeResults} unmarriedLabel={unmarriedLabel} />
           <p className="text-sm text-muted-foreground mt-3">
-            Eligibility estimates do not guarantee an available place. Head Start service values are based on state spending per enrollee and are {activeResults.married.childcare.includeHeadStart ? "included in" : "excluded from"} the income and benefits totals.
+            Eligibility estimates do not guarantee an available place. Head Start service values use state spending per enrollee. They are shown separately from financial resources and included in combined resources.
             {activeResults.married.childcare.enabled && " Benefits include the reduction in family childcare spending once. Care charges, including required family contributions, are deducted once from income. State payments to providers are shown separately because they can exceed the family's price. Paid care excludes free Head Start hours. Vermont estimates assume providers collect the modeled family share."}
           </p>
         </section>
@@ -362,6 +340,40 @@ export default function ResultsDisplay({
       )}
     </div>
   );
+}
+
+function ServiceValueComparison({ results, unmarriedLabel }) {
+  const [showHealthcare, setShowHealthcare] = useState(false);
+  const married = resourceValues(results.married);
+  const singles = (results.unmarried ? [results.unmarried] : [results.headSingle, results.spouseSingle]).map(resourceValues);
+  const rows = [
+    ["Healthcare service value", "healthcareBenefitValue"],
+    ["Early education service value", "earlyEducationServiceValue"],
+    ["Combined resources", "combinedResources"],
+  ];
+  const healthcareRows = computeTableData(results, "healthcare", { countryId: "us" });
+  return <section className="service-comparison" aria-label="Service values and combined resources">
+    <h3>Service values and combined resources</h3>
+    <div className="table-scroll" tabIndex={0} role="region" aria-label="Resource comparison">
+      <table className="data-table resource-table">
+        <thead><tr><th></th><th>{unmarriedLabel}</th><th>Married</th><th>Change</th></tr></thead>
+        <tbody>{rows.map(([label, key]) => {
+          const unmarried = singles.reduce((sum, value) => sum + value[key], 0);
+          return <tr key={key} className={key === "combinedResources" ? "total-row" : ""}>
+            <th scope="row" className="row-label">{label}</th>
+            <td>{formatCurrency(unmarried)}</td>
+            <td>{formatCurrency(married[key])}</td>
+            <td>{formatCurrency(married[key] - unmarried, true)}</td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </div>
+    <p className="resource-note">Combined resources add estimated healthcare and early education service values to financial resources. Service values do not represent additional spendable income.</p>
+    <details className="service-details" onToggle={event => setShowHealthcare(event.currentTarget.open)}>
+      <summary>Healthcare benefit details</summary>
+      {showHealthcare && <DataTable rows={healthcareRows} unmarriedLabel={unmarriedLabel} countryId="us" regionLabel="Healthcare benefit comparison" />}
+    </details>
+  </section>;
 }
 
 function EarlyEducationTable({ results, unmarriedLabel }) {

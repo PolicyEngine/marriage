@@ -1028,6 +1028,92 @@ body {
 }
 
 /* Metric cards — 3-column summary grid */
+.resource-heading {
+  padding: 1.1rem 1.25rem 0;
+  background: var(--pe-gray-50);
+}
+
+.resource-heading h3,
+.service-comparison h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.resource-heading p,
+.resource-note {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.service-comparison {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.service-comparison h3 {
+  margin-bottom: 0.6rem;
+}
+
+.resource-table {
+  min-width: 510px;
+  font-variant-numeric: tabular-nums;
+}
+
+.resource-table th[scope="row"] {
+  text-align: left;
+  font-weight: 400;
+  color: var(--color-text);
+  background: var(--color-surface);
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.88rem;
+  border-bottom-color: var(--color-table-cell-border);
+}
+
+.resource-table .total-row th[scope="row"] {
+  font-weight: 600;
+}
+
+.resource-note {
+  margin-top: 0.65rem;
+}
+
+.service-details {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.service-details summary {
+  width: fit-content;
+  color: var(--color-link);
+  cursor: pointer;
+}
+
+.service-details summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.service-details[open] summary {
+  margin-bottom: 0.65rem;
+}
+
+.heatmap-recovery {
+  padding: 1rem 1.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.heatmap-recovery p + p {
+  margin-top: 0.3rem;
+}
+
+.heatmap-recovery button {
+  margin-top: 0.75rem;
+}
+
 .metric-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
