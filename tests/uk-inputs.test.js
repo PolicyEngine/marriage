@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  createSituation, splitExtras, deductRent, housingCostFor, isRentedTenure,
+  createSituation, splitExtras, isRentedTenure,
   UK_EXTRAS_DEFAULTS,
 } from "../lib/api.js";
 import { COUNTRIES, DEFAULT_COUNTRY } from "../lib/countries.js";
@@ -116,25 +116,6 @@ describe("splitExtras: allocation when the couple separates", () => {
   });
 });
 
-describe("deductRent: net income after housing costs", () => {
-  const aggs = { householdNetIncome: 40000, householdNetIncomeWithHealth: 40000 };
-
-  it("subtracts rent for a UK renter", () => {
-    const r = deductRent("uk", aggs, { rent: 12000, tenureType: "RENT_PRIVATELY" });
-    expect(r.householdNetIncome).toBe(28000);
-    expect(r.rentDeducted).toBe(12000);
-  });
-
-  it("is a no-op at zero rent, so existing UK results do not move", () => {
-    expect(deductRent("uk", aggs, { rent: 0, tenureType: "RENT_PRIVATELY" })).toEqual(aggs);
-  });
-
-  it("never applies to the US, which has no rent input", () => {
-    expect(deductRent("us", aggs, { rent: 12000, tenureType: "RENT_PRIVATELY" })).toEqual(aggs);
-    expect(COUNTRIES.us.deductRentFromNetIncome).toBeUndefined();
-  });
-});
-
 describe("UK config", () => {
   it("enables the Universal Credit inputs", () => {
     const c = COUNTRIES.uk;
@@ -160,7 +141,6 @@ describe("UK config", () => {
 });
 
 describe("tenure: owners have no rent to deduct", () => {
-  const aggs = { householdNetIncome: 40000, householdNetIncomeWithHealth: 40000 };
 
   it("treats the three rented tenures as renting", () => {
     expect(isRentedTenure("RENT_PRIVATELY")).toBe(true);
@@ -173,25 +153,7 @@ describe("tenure: owners have no rent to deduct", () => {
     expect(isRentedTenure("OWNED_WITH_MORTGAGE")).toBe(false);
   });
 
-  it("charges no housing cost to an owner even if a rent figure is present", () => {
-    expect(housingCostFor({ rent: 12000, tenureType: "OWNED_OUTRIGHT" })).toBe(0);
-    expect(housingCostFor({ rent: 12000, tenureType: "RENT_PRIVATELY" })).toBe(12000);
-  });
 
-  it("does not deduct rent from an owner's net income", () => {
-    // uc_housing_costs_element pays nothing on an owned tenure, so deducting
-    // rent here would take money off with no housing support to match it.
-    const owner = deductRent("uk", aggs, { rent: 12000, tenureType: "OWNED_OUTRIGHT" });
-    expect(owner).toEqual(aggs);
-    const renter = deductRent("uk", aggs, { rent: 12000, tenureType: "RENT_PRIVATELY" });
-    expect(renter.householdNetIncome).toBe(28000);
-  });
-
-  it("defaults to owning outright, so no rent is deducted by default", () => {
-    expect(UK_EXTRAS_DEFAULTS.tenureType).toBe("OWNED_OUTRIGHT");
-    expect(isRentedTenure(undefined)).toBe(false);
-    expect(housingCostFor({ rent: 12000 })).toBe(0);
-  });
 });
 
 describe("UK years", () => {

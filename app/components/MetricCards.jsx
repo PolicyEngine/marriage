@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { formatCurrency, formatPercent, unmarriedTotal } from "@/lib/utils";
+import { formatCurrency, formatPercent, unmarriedTotal, resourceValues } from "@/lib/utils";
 
 function getShareUrl(countryId) {
   const hash = window.location.hash;
@@ -15,9 +15,13 @@ export default function MetricCards({ results, showHealth, currencySymbol, count
   const { married } = results;
   const [copied, setCopied] = useState(false);
 
+  const financialView = countryId === "us";
   const netKey = showHealth ? "householdNetIncomeWithHealth" : "householdNetIncome";
-  const netMarried = married.aggregates[netKey];
-  const netSeparate = unmarriedTotal(results, "aggregates", netKey);
+  const netMarried = financialView ? resourceValues(married).financialResources : married.aggregates[netKey];
+  const netSeparate = financialView
+    ? (results.unmarried ? [results.unmarried] : [results.headSingle, results.spouseSingle])
+      .reduce((sum, result) => sum + resourceValues(result).financialResources, 0)
+    : unmarriedTotal(results, "aggregates", netKey);
   const delta = netMarried - netSeparate;
   const pctChange = netSeparate !== 0 ? delta / netSeparate : 0;
   const afterChildcare = married.childcare?.enabled;
@@ -64,17 +68,22 @@ export default function MetricCards({ results, showHealth, currencySymbol, count
   }
 
   return (
+    <section aria-label={financialView ? "Household financial resources" : "Net income comparison"}>
+    {financialView && <div className="resource-heading">
+      <h3>Household financial resources</h3>
+      <p>Annual resources after taxes and modeled expenses, including benefits such as SNAP.</p>
+    </div>}
     <div className="metric-cards">
       <div className="metric-card" data-testid="metric-net">
         <div className="metric-label">{unmarriedLabel}</div>
         <div className="metric-value">{formatCurrency(netSeparate, false, sym)}</div>
-        <div className="metric-desc">{results.unmarried ? "Household net income" : "Combined net income"}{afterChildcare ? " after childcare" : ""}</div>
+        <div className="metric-desc">{financialView ? "Annual financial resources" : <>{results.unmarried ? "Household net income" : "Combined net income"}{afterChildcare ? " after childcare" : ""}</>}</div>
       </div>
 
       <div className="metric-card" data-testid="metric-pct">
         <div className="metric-label">Married</div>
         <div className="metric-value">{formatCurrency(netMarried, false, sym)}</div>
-        <div className="metric-desc">Household net income{afterChildcare ? " after childcare" : ""}</div>
+        <div className="metric-desc">{financialView ? "Annual financial resources" : <>Household net income{afterChildcare ? " after childcare" : ""}</>}</div>
       </div>
 
       <div className={deltaClass} data-testid="metric-delta">
@@ -90,5 +99,6 @@ export default function MetricCards({ results, showHealth, currencySymbol, count
         <div className="metric-desc">{formatPercent(pctChange, true)}</div>
       </div>
     </div>
+    </section>
   );
 }

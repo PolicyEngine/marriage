@@ -1,0 +1,47 @@
+name: Calculator checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: calculator-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install locked dependencies
+        run: |
+          bun install --frozen-lockfile
+          uv sync --project backend --frozen --python 3.12
+      - name: Check backend formatting and lint
+        run: |
+          uv run --project backend --no-sync ruff check backend
+          uv run --project backend --no-sync ruff format --check backend
+      - name: Backend tests
+        run: bun run test:backend
+      - name: Frontend lint
+        run: bun run lint
+      - name: Unit and local US integration tests
+        run: bun run test:ci
+      - name: Production build
+        run: bun run build

@@ -243,13 +243,24 @@ def _apply_vermont_family_share(simulation, year):
 
 
 def calculate_household(
-    household, include_head_start_benefits=False, ccdf_participation_filter=False
+    household,
+    include_head_start_benefits=False,
+    ccdf_participation_filter=False,
+    accounting_version=None,
 ):
     if type(include_head_start_benefits) is not bool:
         raise InvalidHousehold("include_head_start_benefits must be a boolean.")
     if type(ccdf_participation_filter) is not bool:
         raise InvalidHousehold("ccdf_participation_filter must be a boolean.")
-    system = get_system(include_head_start_benefits)
+    if accounting_version is not None and (
+        type(accounting_version) is not int or accounting_version != 1
+    ):
+        raise InvalidHousehold("Only accounting_version 1 is supported.")
+    # New accounting reports service values independently of presentation
+    # choices. Legacy requests retain the original opt-in inclusion behavior.
+    system = get_system(
+        False if accounting_version == 1 else include_head_start_benefits
+    )
     requested = validate_household(household, system)
     result = deepcopy(household)
     try:
@@ -291,7 +302,19 @@ def calculate_household(
             index = simulation.get_population(plural).get_index(entity_id)
             entity_result = values[index]
         result[plural][entity_id][name][period] = entity_result
-    return {"status": "ok", "result": result, "model_version": MODEL_VERSION}
+    response = {"status": "ok", "result": result, "model_version": MODEL_VERSION}
+    if accounting_version == 1:
+        from backend.accounting import build_accounting
+
+        try:
+            response["accounting"] = build_accounting(
+                simulation, requested, requested[0][3], MODEL_VERSION
+            )
+        except Exception as error:
+            raise CalculationError(
+                "Could not reconcile household resources."
+            ) from error
+    return response
 
 
 @lru_cache(maxsize=2)

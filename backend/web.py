@@ -55,6 +55,7 @@ async def calculate(request: Request):
             "household",
             "include_head_start_benefits",
             "ccdf_participation_filter",
+            "accounting_version",
         }:
             raise InvalidHousehold("Unknown request fields.")
         return await run_in_threadpool(
@@ -62,8 +63,45 @@ async def calculate(request: Request):
             params.get("household"),
             params.get("include_head_start_benefits", False),
             params.get("ccdf_participation_filter", False),
+            params.get("accounting_version"),
         )
     except (ValueError, InvalidHousehold) as error:
+        return JSONResponse(
+            status_code=422, content={"status": "error", "message": str(error)}
+        )
+    except CalculationError as error:
+        return JSONResponse(
+            status_code=500, content={"status": "error", "message": str(error)}
+        )
+
+
+@web_app.post("/uk/calculate")
+async def calculate_uk(request: Request):
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > MAX_PAYLOAD_BYTES:
+            return JSONResponse(
+                status_code=413,
+                content={"status": "error", "message": "Request size limit exceeded."},
+            )
+    try:
+        import json
+
+        from backend.uk import calculate_uk_household
+
+        params = json.loads(body)
+        if not isinstance(params, dict) or set(params) - {
+            "household",
+            "accounting_version",
+        }:
+            raise InvalidHousehold("Unknown request fields.")
+        return await run_in_threadpool(
+            calculate_uk_household,
+            params.get("household"),
+            params.get("accounting_version"),
+        )
+    except ValueError as error:
         return JSONResponse(
             status_code=422, content={"status": "error", "message": str(error)}
         )

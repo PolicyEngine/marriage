@@ -182,6 +182,7 @@ export default function MarriageApp({ initialCountry = null }) {
   const [loading, setLoading] = useState(false);
   const [heatmapLoading, setHeatmapLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [heatmapError, setHeatmapError] = useState(null);
   const [formData, setFormData] = useState(null);
   const [valentine, setValentine] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -189,6 +190,10 @@ export default function MarriageApp({ initialCountry = null }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const didAutoCalc = useRef(false);
   const calculationId = useRef(0);
+  const activeRequest = useRef(null);
+  const retrySnapshot = useRef(null);
+
+  useEffect(() => () => activeRequest.current?.abort(), []);
 
   // Resolve browser-only state after mount.
   // initialCountry already seeded countryId (for the rewrite path), so it
@@ -266,11 +271,15 @@ export default function MarriageApp({ initialCountry = null }) {
     // A request from the previous living arrangement must not repopulate the
     // page after an input has changed.
     calculationId.current += 1;
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    retrySnapshot.current = null;
     setResults(null);
     setHeatmapData(null);
     setLoading(false);
     setHeatmapLoading(false);
     setError(null);
+    setHeatmapError(null);
     setExternalIncomes(null);
   }
 
@@ -282,16 +291,14 @@ export default function MarriageApp({ initialCountry = null }) {
     }
   }
 
-  async function handleCalculate(data) {
-    const requestId = ++calculationId.current;
-    setFormData(data);
-    updateHash(data);
-
+  function requestArguments(snapshot, signal) {
+    const { data, countryId: requestCountry } = snapshot;
     const {
       headIncome, spouseIncome, headAge, spouseAge,
       children, disabilityStatus, pregnancyStatus, esiStatus, year,
     } = data;
     const extras = {
+      signal,
       livingArrangement: data.livingArrangement || "cohabiting",
       rent: data.rent || 0,
       tenureType: data.tenureType || "OWNED_OUTRIGHT",
@@ -308,43 +315,83 @@ export default function MarriageApp({ initialCountry = null }) {
       childcareActivityEligible: (data.regionCode || data.stateCode) === "NV" && Boolean(data.childcareActivityEligible),
     };
     const regionCode = data.regionCode || data.stateCode;
-    const effectiveRegion = countryId === "us" && regionCode === "NYC" ? "NY" : regionCode;
-    const inNYC = countryId === "us" && regionCode === "NYC";
+    const effectiveRegion = requestCountry === "us" && regionCode === "NYC" ? "NY" : regionCode;
+    const inNYC = requestCountry === "us" && regionCode === "NYC";
+    return {
+      scalar: [requestCountry, effectiveRegion, headIncome, spouseIncome, children,
+        disabilityStatus, year, pregnancyStatus, headAge, spouseAge, esiStatus, inNYC, extras],
+      heatmap: [requestCountry, effectiveRegion, children, disabilityStatus, year,
+        pregnancyStatus, headIncome, spouseIncome, headAge, spouseAge, esiStatus, inNYC, extras],
+    };
+  }
+
+  function startRequest() {
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    return { requestId: ++calculationId.current, controller };
+  }
+
+  async function loadHeatmap(snapshot, requestId, controller) {
+    setHeatmapLoading(true);
+    setHeatmapError(null);
+    try {
+      const heatmap = await getHeatmapData(...requestArguments(snapshot, controller.signal).heatmap);
+      if (requestId !== calculationId.current || controller.signal.aborted) return;
+      setHeatmapData(heatmap);
+    } catch (e) {
+      if (requestId !== calculationId.current || controller.signal.aborted) return;
+      setHeatmapError(e.message || "The heatmap could not be calculated. Please try again.");
+      // A failed comparison must also stop any sibling fetches still running.
+      controller.abort();
+    } finally {
+      if (requestId === calculationId.current) {
+        setHeatmapLoading(false);
+        activeRequest.current = null;
+      }
+    }
+  }
+
+  async function handleCalculate(data) {
+    // Retry the submitted values, never a partially edited form or mutable
+    // object retained by the caller. Country changes clear this snapshot.
+    const snapshot = { countryId, data: structuredClone(data) };
+    retrySnapshot.current = snapshot;
+    const { requestId, controller } = startRequest();
+    setFormData(snapshot.data);
+    updateHash(snapshot.data);
 
     setLoading(true);
     setError(null);
+    setHeatmapError(null);
+    setHeatmapLoading(false);
     setResults(null);
     setHeatmapData(null);
 
     try {
-      const result = await getCategorizedPrograms(
-        countryId, effectiveRegion, headIncome, spouseIncome, children,
-        disabilityStatus, year, pregnancyStatus, headAge, spouseAge,
-        esiStatus, inNYC, extras,
-      );
-      if (requestId !== calculationId.current) return;
+      const result = await getCategorizedPrograms(...requestArguments(snapshot, controller.signal).scalar);
+      if (requestId !== calculationId.current || controller.signal.aborted) return;
       setResults(result);
       setLoading(false);
 
-      setHeatmapLoading(true);
-      try {
-        const heatmap = await getHeatmapData(
-          countryId, effectiveRegion, children, disabilityStatus, year,
-          pregnancyStatus, headIncome, spouseIncome, headAge, spouseAge,
-          esiStatus, inNYC, extras,
-        );
-        if (requestId !== calculationId.current) return;
-        setHeatmapData(heatmap);
-      } catch (e) {
-        console.error("Heatmap error:", e);
-      } finally {
-        if (requestId === calculationId.current) setHeatmapLoading(false);
-      }
+      await loadHeatmap(snapshot, requestId, controller);
     } catch (e) {
-      if (requestId !== calculationId.current) return;
-      setError(e.message);
+      if (requestId !== calculationId.current || controller.signal.aborted) return;
+      setError(e.message || "The calculation could not be completed. Please try again.");
       setLoading(false);
+      controller.abort();
+      activeRequest.current = null;
     }
+  }
+
+  function retryCalculation() {
+    if (retrySnapshot.current) handleCalculate(retrySnapshot.current.data);
+  }
+
+  function retryHeatmap() {
+    if (!retrySnapshot.current || !results) return;
+    const { requestId, controller } = startRequest();
+    loadHeatmap(retrySnapshot.current, requestId, controller);
   }
 
   function handleCellClick(headIncome, spouseIncome) {
@@ -423,7 +470,11 @@ export default function MarriageApp({ initialCountry = null }) {
           </aside>
 
           <main className="app-main">
-            {error && <div className="error">{error}</div>}
+            {error && <div className="error" role="alert">
+              <p>{error}</p>
+              <button type="button" className="mt-3 rounded-md bg-primary px-4 py-2 font-medium text-white"
+                onClick={retryCalculation}>Retry calculation</button>
+            </div>}
 
             {loading && (
               <div className="main-placeholder">
@@ -431,7 +482,7 @@ export default function MarriageApp({ initialCountry = null }) {
               </div>
             )}
 
-            {!results && !loading && (
+            {!results && !loading && !error && (
               <div className="main-placeholder main-placeholder--intro">
                 <div className="intro-card">
                   <h2>What would marriage mean for your taxes?</h2>
@@ -456,6 +507,8 @@ export default function MarriageApp({ initialCountry = null }) {
                 results={results}
                 heatmapData={heatmapData}
                 heatmapLoading={heatmapLoading}
+                heatmapError={heatmapError}
+                onRetryHeatmap={retryHeatmap}
                 headIncome={formData?.headIncome ?? 0}
                 spouseIncome={formData?.spouseIncome ?? 0}
                 valentine={valentine}

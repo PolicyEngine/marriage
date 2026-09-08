@@ -17,9 +17,11 @@ forwarded to the server component; see `app/page.jsx`.
 ## Development
 
 ```sh
-bun install
+bun install --frozen-lockfile
+uv sync --project backend --frozen --python 3.12
 NEXT_PUBLIC_BASE_PATH="" bun run dev   # serve at http://localhost:5173/
-bun run test:ci                        # component and live API tests
+bun run test:ci                        # unit and local US integration tests
+bun run test:backend                   # accounting and HTTP tests
 bun run build                          # production bundle
 ```
 
@@ -29,9 +31,10 @@ server serves at the root — matches the Oregon Kicker convention.
 ## US childcare, early education and disability
 
 US calculations use the app-owned [household backend](backend/README.md), pinned
-to PolicyEngine US 1.824.1. UK calculations use the public v1 API. Set
-`NEXT_PUBLIC_US_API_URL=http://127.0.0.1:8012` to use the local US backend for
-development or tests. Production defaults to the deployed Modal service and
+to PolicyEngine US 1.824.1. UK policy calculations still use the public v1 API,
+through the same backend, which applies the calculator’s rent accounting. Set
+`NEXT_PUBLIC_US_API_URL=http://127.0.0.1:8012` to use a local backend for both
+countries in development. Production defaults to the deployed Modal service and
 rejects responses whose model version differs from the committed metadata.
 
 Paid childcare costs feed into the estimates automatically. The funded-slot
@@ -53,9 +56,11 @@ Initial-applicant, standard-quality,
 zero-assets and available-funding assumptions apply unless an input says otherwise.
 
 Head Start and Early Head Start eligibility are shown separately from their
-estimated service values. Those noncash values are excluded from net income
-unless explicitly selected; they use state spending per enrollee and assume
-eligible participation. Actual Head Start enrollment is a separate childcare
+estimated service values. Healthcare and early education values are always
+separate from household financial resources and added only in the explicitly
+labeled combined-resources comparison. Head Start values use state spending
+per enrollee and assume eligible participation. Employer insurance affects
+eligibility inputs, independently of this presentation. Actual Head Start enrollment is a separate childcare
 input. The SSI medical-disability checkbox sets both
 `meets_ssi_disability_criteria` and `is_disabled`; financial eligibility remains
 model-computed.
@@ -68,3 +73,16 @@ provider enums and aggregate composition after reviewing a model update:
 uv run --project backend python -m backend.simulation --metadata /tmp/marriage-metadata.json
 US_METADATA_FILE=/tmp/marriage-metadata.json bun run metadata
 ```
+
+## Accounting and release checks
+
+The backend returns versioned, reconciled annual series for every household
+and income-grid point. The browser displays these series without adjusting
+childcare benefits, service values, or rent again. Financial resources include
+benefits such as SNAP; they are not a cash-only measure. The original model
+outputs remain available separately in the API response.
+
+The [test workflow](docs/testing.md) checks the pinned runtime and frontend on
+every pull request. The UK model’s external integration checks run separately.
+Requests time out after two minutes and are cancelled when inputs change.
+Failed charts retain the household comparison and offer a chart-only retry.

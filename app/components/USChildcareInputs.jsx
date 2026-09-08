@@ -77,7 +77,7 @@ function NumberField({ id, label, value, onChange, max, step = "any" }) {
 export default function USChildcareInputs({
   regionCode, childEntries, updateChild, ccdfSlotAvailable, onCcdfSlotAvailableChange,
   childcareCounty, onCountyChange, childcareWorkHours, onWorkHoursChange,
-  includeHeadStart, onIncludeHeadStartChange, childcareActivityEligible, onActivityEligibleChange, error,
+  childcareActivityEligible, onActivityEligibleChange, error,
 }) {
   const state = stateCode(regionCode);
   const counties = childcareCounties(regionCode);
@@ -147,8 +147,7 @@ export default function USChildcareInputs({
           ))}
         </div>
       )}
-      <Toggle label="Include Head Start service values" checked={includeHeadStart} onChange={onIncludeHeadStartChange} />
-      <p className="sf-input-note">Includes modeled Head Start and Early Head Start service values for eligible enrollment. These are in-kind services, not cash payments or guaranteed places.</p>
+      <p className="sf-input-note">Head Start and Early Head Start service values appear separately from financial resources in the results. Eligibility does not guarantee an available place.</p>
       {error && <p role="alert" className="sf-childcare-error">{error}</p>}
     </div>
   );

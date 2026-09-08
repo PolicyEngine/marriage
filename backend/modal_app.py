@@ -11,7 +11,9 @@ image = (
     .uv_sync(uv_project_dir=backend_dir, frozen=True, groups=[])
     .add_local_file(backend_dir / "__init__.py", "/root/backend/__init__.py")
     .add_local_file(backend_dir / "simulation.py", "/root/backend/simulation.py")
+    .add_local_file(backend_dir / "accounting.py", "/root/backend/accounting.py")
     .add_local_file(backend_dir / "web.py", "/root/backend/web.py")
+    .add_local_file(backend_dir / "uk.py", "/root/backend/uk.py")
 )
 
 

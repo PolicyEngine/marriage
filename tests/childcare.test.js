@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { createSituation, getCategorizedPrograms, getPrograms, getHeatmapData, buildCellResults } from "../lib/api";
-import { normalizeUSChildcare } from "../lib/childcare";
 import metadata from "../lib/childcare-metadata.json";
 import { computeTableData } from "../lib/utils";
 
@@ -41,32 +40,7 @@ describe("childcare inputs and accounting", () => {
     }
   });
 
-  it.each([["CA", 8000, 2000], ["FL", 2000, 2000]])("counts %s childcare once", (state, stateBenefits, expectedOther) => {
-    const data = { child_care_subsidies: [6000], household_state_benefits: [stateBenefits],
-      household_benefits: [stateBenefits + 1000], household_net_income: [30000],
-      household_net_income_including_health_benefits: [35000], head_start: [20000], early_head_start: [0] };
-    normalizeUSChildcare(data, state, 12000, {});
-    expect(data.household_state_benefits[0]).toBe(expectedOther);
-    expect(data.household_benefits[0]).toBe(9000);
-    expect(data.household_net_income[0]).toBe(state === "CA" ? 18000 : 24000);
-    expect(data.head_start[0]).toBe(0);
-    expect(data.head_start_service_value[0]).toBe(20000);
-    expect(data.childcare_out_of_pocket[0]).toBe(6000);
-  });
 
-  it("separates provider reimbursement from household assistance and collectible copays", () => {
-    const data = { child_care_subsidies: [18564, 0, 18564], childcare_expenses: [2600, 13000, 15000],
-      vt_ccfap_family_share: [2600, 2600, 15000], household_state_benefits: [0, 0, 0],
-      household_benefits: [1000, 1000, 1000], household_net_income: [50000, 50000, 50000],
-      household_net_income_including_health_benefits: [55000, 55000, 55000] };
-    normalizeUSChildcare(data, "VT", 13000, {});
-    expect(data.childcare_provider_payment).toEqual([18564, 0, 18564]);
-    expect(data.child_care_subsidies).toEqual([10400, 0, 0]);
-    expect(data.childcare_out_of_pocket).toEqual([2600, 13000, 15000]);
-    expect(data.childcare_family_share).toEqual([2600, 0, 15000]);
-    expect(data.household_net_income).toEqual([47400, 37000, 35000]);
-    expect(data.childcare_cost_deducted).toEqual([13000, 13000, 15000]);
-  });
 });
 
 describe("current runtime childcare regressions", () => {

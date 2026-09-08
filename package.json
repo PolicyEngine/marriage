@@ -11,8 +11,12 @@
     "metadata": "node scripts/update-metadata.cjs",
     "prebuild": "node scripts/update-metadata.cjs",
     "test": "vitest run",
-    "test:ci": "vitest run tests/api.test.js tests/design.test.jsx tests/heatmap.test.js tests/page-country.test.jsx tests/metadata-integrity.test.js tests/uk-inputs.test.js tests/uk-live.test.js tests/breakdown.test.js tests/uk-combinations.test.js tests/review-fixes.test.js tests/heatmap-tooltip.test.jsx tests/living-arrangement.test.js tests/living-arrangement-live.test.js tests/living-arrangement-ui.test.jsx tests/childcare.test.js tests/childcare-ui.test.jsx",
-    "test:watch": "vitest"
+    "test:ci": "bun scripts/test-ci.mjs",
+    "test:watch": "vitest",
+    "test:frontend": "vitest run --config vitest.ci.config.js",
+    "test:backend": "uv run --project backend --no-sync pytest backend/tests -q",
+    "test:live:uk": "bun scripts/test-ci.mjs --live-uk",
+    "test:frontend:live:uk": "vitest run tests/uk-api-live.test.js tests/uk-live.test.js tests/uk-combinations.test.js --maxWorkers=1"
   },
   "dependencies": {
     "next": "^16.2.6",
