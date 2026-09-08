@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { formatCurrency, formatPercent } from "@/lib/utils";
+import { formatCurrency, formatPercent, unmarriedTotal } from "@/lib/utils";
 
 function getShareUrl(countryId) {
   const hash = window.location.hash;
@@ -10,14 +10,14 @@ function getShareUrl(countryId) {
   return window.location.href;
 }
 
-export default function MetricCards({ results, showHealth, currencySymbol, countryId }) {
+export default function MetricCards({ results, showHealth, currencySymbol, countryId, livingArrangement }) {
   const sym = currencySymbol || "$";
-  const { married, headSingle, spouseSingle } = results;
+  const { married } = results;
   const [copied, setCopied] = useState(false);
 
   const netKey = showHealth ? "householdNetIncomeWithHealth" : "householdNetIncome";
   const netMarried = married.aggregates[netKey];
-  const netSeparate = headSingle.aggregates[netKey] + spouseSingle.aggregates[netKey];
+  const netSeparate = unmarriedTotal(results, "aggregates", netKey);
   const delta = netMarried - netSeparate;
   const pctChange = netSeparate !== 0 ? delta / netSeparate : 0;
 
@@ -30,7 +30,12 @@ export default function MetricCards({ results, showHealth, currencySymbol, count
     isPenalty ? "penalty" : "",
   ].filter(Boolean).join(" ");
 
-  const deltaLabel = isBonus ? "Marriage bonus" : isPenalty ? "Marriage penalty" : "No change";
+  const combinesHouseholds = countryId === "us" && livingArrangement === "separate";
+  const deltaLabel = isBonus ? (combinesHouseholds ? "Increase" : "Marriage bonus")
+    : isPenalty ? (combinesHouseholds ? "Decrease" : "Marriage penalty") : "No change";
+  const unmarriedLabel = countryId === "us"
+    ? `Unmarried, ${results.unmarried ? "living together" : "living separately"}`
+    : "Not married";
 
   function handleShare() {
     const url = getShareUrl(countryId);
@@ -60,9 +65,9 @@ export default function MetricCards({ results, showHealth, currencySymbol, count
   return (
     <div className="metric-cards">
       <div className="metric-card" data-testid="metric-net">
-        <div className="metric-label">Not married</div>
+        <div className="metric-label">{unmarriedLabel}</div>
         <div className="metric-value">{formatCurrency(netSeparate, false, sym)}</div>
-        <div className="metric-desc">Combined net income</div>
+        <div className="metric-desc">{results.unmarried ? "Household net income" : "Combined net income"}</div>
       </div>
 
       <div className="metric-card" data-testid="metric-pct">

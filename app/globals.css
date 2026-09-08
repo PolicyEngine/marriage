@@ -938,6 +938,24 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
+.comparison-heading {
+  padding: 1.25rem 1.25rem 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--color-secondary-bg);
+  color: var(--color-section-heading);
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.comparison-assumptions {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--color-border-light);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
 .headline-banner {
   display: flex;
   align-items: center;

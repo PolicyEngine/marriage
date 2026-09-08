@@ -53,6 +53,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     (iv.children || []).map((c) => ({ ...c, age: String(c.age) })),
   );
   const [year, setYear] = useState(iv.year || country.defaultYear);
+  const [livingArrangement, setLivingArrangement] = useState(iv.livingArrangement || "cohabiting");
   // UK Universal Credit inputs. Each maps to an element of uc_maximum_amount
   // or a means-test component; see lib/api.js createUKSituation.
   const [rent, setRent] = useState(formatIncome(iv.rent != null ? iv.rent : 0));
@@ -77,7 +78,8 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     formatIncome(iv.pensionIncome?.spouse || 0),
   );
   const [errors, setErrors] = useState({});
-  const hasMounted = useRef(false);
+  const previousInputs = useRef(null);
+  const syncedIncomes = useRef(null);
   const childrenKey = children.map((c) => `${c.age}:${c.isDisabled}`).join(",");
   const adultInputs = ["age"];
   if (country.hasDisability) adultInputs.push("disability");
@@ -127,8 +129,21 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   const assumptions = [
     `The calculator uses only the inputs shown here: ${country.regionLabel.toLowerCase()}, year, each adult's wages, ${joinWithAnd(adultInputs)}${householdInputs.length ? `, the household's ${joinWithAnd(householdInputs)}` : ""}, and each child's ${country.hasDisability && country.id !== "uk" ? "age and disability" : "age"}.`,
     `Earnings mean wages and salaries only. ${capitaliseFirst(joinWithAnd([...omitted, "other omitted inputs"]))} are assumed to be zero.`,
-    `For the ${separateLabel} comparison, all children are assigned to you and your partner is simulated separately without children.`,
   ];
+  if (country.id === "us") {
+    assumptions.push("All children are assumed to be both adults' children.");
+  }
+  if (country.id === "us" && livingArrangement === "cohabiting") {
+    assumptions.push(
+      "Living together, you share a home, buy and prepare food together, and share resources. SNAP and other modeled household benefits use a shared resource unit in both scenarios.",
+      "For unmarried taxes, all children are assigned to you, and your partner files separately. You pay more than half the cost of keeping up the home, allowing head-of-household filing when otherwise eligible.",
+    );
+  } else {
+    assumptions.push(`For the ${separateLabel} comparison, all children are assigned to you and your partner is simulated separately without children.`);
+  }
+  if (country.id === "us" && livingArrangement === "separate") {
+    assumptions.push("This comparison includes the effect of combining households as well as marriage. Housing costs and savings from sharing a home are not modeled.");
+  }
   if (country.id === "uk") {
     assumptions.push(
       "The UK assesses couples on whether they live together, not on marriage. This compares a cohabiting couple with two separate households.",
@@ -158,6 +173,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       prevCountryId.current = country.id;
       setRegionCode(country.defaultRegion);
       setYear(country.defaultYear);
+      setLivingArrangement("cohabiting");
       setHeadAge(String(country.defaultAge));
       setSpouseAge(String(country.defaultAge));
       if (!country.hasDisability) {
@@ -196,16 +212,26 @@ export default function InputForm({ country, countries, countryId, onCountryChan
 
   // Clear stale results when inputs change (but not on initial mount)
   useEffect(() => {
-    if (!hasMounted.current) {
-      hasMounted.current = true;
-      return;
+    const inputs = [regionCode, headIncome, spouseIncome, headAge, spouseAge,
+      headDisabled, spouseDisabled, headPregnant, spousePregnant, headESI, spouseESI, year, childrenKey, livingArrangement,
+      rent, tenureType, brma, childcareCosts, savings,
+      headCarer, spouseCarer, headSelfEmp, spouseSelfEmp, headPension, spousePension];
+    const previous = previousInputs.current;
+    previousInputs.current = inputs;
+    // Strict Mode repeats mount effects. Only an actual value change should
+    // cancel a pending calculation, including one restored from a shared link.
+    if (!previous || inputs.every((value, i) => value === previous[i])) return;
+    if (syncedIncomes.current) {
+      const synced = syncedIncomes.current;
+      syncedIncomes.current = null;
+      if (headIncome === synced.headIncome && spouseIncome === synced.spouseIncome) return;
     }
     if (onInputChange) onInputChange();
   }, [regionCode, headIncome, spouseIncome, headAge, spouseAge,
-    headDisabled, spouseDisabled, headESI, spouseESI, year, childrenKey,
+    headDisabled, spouseDisabled, headPregnant, spousePregnant, headESI, spouseESI, year, childrenKey, livingArrangement,
     rent, tenureType, brma, childcareCosts, savings,
     headCarer, spouseCarer, headSelfEmp, spouseSelfEmp,
-    headPension, spousePension]);
+    headPension, spousePension, onInputChange]);
 
   function buildFormData() {
     return {
@@ -220,6 +246,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       pregnancyStatus: { head: headPregnant, spouse: spousePregnant },
       esiStatus: { head: headESI, spouse: spouseESI },
       year,
+      livingArrangement: country.id === "us" ? livingArrangement : "separate",
       rent: rentsApply ? parseNumber(rent) : 0,
       tenureType,
       brma,
@@ -240,9 +267,16 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   // Sync income fields when heatmap cell is clicked
   useEffect(() => {
     if (externalIncomes) {
-      setHeadIncome(formatIncome(externalIncomes.headIncome));
-      setSpouseIncome(formatIncome(externalIncomes.spouseIncome));
+      const nextHead = formatIncome(externalIncomes.headIncome);
+      const nextSpouse = formatIncome(externalIncomes.spouseIncome);
+      if (nextHead !== headIncome || nextSpouse !== spouseIncome) {
+        syncedIncomes.current = { headIncome: nextHead, spouseIncome: nextSpouse };
+        setHeadIncome(nextHead);
+        setSpouseIncome(nextSpouse);
+      }
     }
+    // Only external selections trigger a sync; user edits must remain editable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalIncomes]);
 
   function setError(field, msg) {
@@ -326,6 +360,20 @@ export default function InputForm({ country, countries, countryId, onCountryChan
           </select>
         </div>
       </div>
+
+      {country.id === "us" && (
+        <div className="sf-field">
+          <label htmlFor="living-arrangement">Unmarried living arrangement</label>
+          <select
+            id="living-arrangement"
+            value={livingArrangement}
+            onChange={(e) => setLivingArrangement(e.target.value)}
+          >
+            <option value="cohabiting">Living together</option>
+            <option value="separate">Living separately</option>
+          </select>
+        </div>
+      )}
 
       <PersonSection
         title="You"
@@ -804,6 +852,7 @@ function PersonSection({
             <input
               type="text"
               inputMode="numeric"
+              aria-label={`${title} income`}
               value={income}
               className={incomeError ? "input-error" : ""}
               onChange={(e) => onIncomeChange(e.target.value)}
@@ -818,6 +867,7 @@ function PersonSection({
             type="number"
             min="18"
             max="100"
+            aria-label={`${title} age`}
             value={age}
             className={ageError ? "input-error" : ""}
             onChange={(e) => onAgeChange(e.target.value)}

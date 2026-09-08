@@ -133,8 +133,9 @@ describe("Scenario 1: Married CA $45k/$45k no children", () => {
     expect(result.health).not.toHaveProperty("medicaid");
   });
 
-  it("uses aca_ptc not premium_tax_credit", () => {
-    expect(result.health).toHaveProperty("aca_ptc");
+  it("uses person-assigned ACA subsidies without double-counting tax-unit credits", () => {
+    expect(result.health).toHaveProperty("assigned_aca_ptc");
+    expect(result.health).not.toHaveProperty("aca_ptc");
     expect(result.health).not.toHaveProperty("premium_tax_credit");
   });
 

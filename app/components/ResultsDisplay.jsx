@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, Suspense, lazy } from "react";
-import { computeTableData, formatCurrency, PROGRAM_DESCRIPTIONS } from "@/lib/utils";
+import { computeTableData, unmarriedTotal, PROGRAM_DESCRIPTIONS } from "@/lib/utils";
 import { buildCellResults, buildCellBreakdown } from "@/lib/api";
 import MetricCards from "./MetricCards";
 
@@ -18,7 +18,7 @@ const UK_HEATMAP_OVERRIDES = {
   taxes: "tax",
 };
 
-function DataTable({ rows, emptyMessage }) {
+function DataTable({ rows, emptyMessage, unmarriedLabel = "Not married", countryId }) {
   if (rows.length === 0) {
     return <p className="loading">{emptyMessage || "No data to display."}</p>;
   }
@@ -34,10 +34,10 @@ function DataTable({ rows, emptyMessage }) {
 
   const scenarioCols = [
     ...(showIndividual ? [
-      { label: "You (single)", key: "headSingle" },
-      { label: "Partner (single)", key: "spouseSingle" },
+      { label: countryId === "us" ? "You (unmarried)" : "You (single)", key: "headSingle" },
+      { label: countryId === "us" ? "Partner (unmarried)" : "Partner (single)", key: "spouseSingle" },
     ] : []),
-    { label: "Not married", key: "notMarried" },
+    { label: unmarriedLabel, key: "notMarried" },
     { label: "Married", key: "married" },
     { label: "Delta", key: "delta", colored: true },
     { label: "Delta %", key: "deltaPct", colored: true },
@@ -85,122 +85,6 @@ function DataTable({ rows, emptyMessage }) {
   );
 }
 
-const TAB_HEADLINE = {
-  summary: {
-    agg: (r, health) => r.aggregates[health ? "householdNetIncomeWithHealth" : "householdNetIncome"],
-    desc: (m, s, sym) => `Net income: married ${formatCurrency(m, false, sym)} vs. not married ${formatCurrency(s, false, sym)}`,
-    invertSign: false,
-  },
-  taxes: {
-    agg: (r) => r.aggregates.householdTaxBeforeCredits,
-    desc: (m, s, sym) => `Total taxes: married ${formatCurrency(m, false, sym)} vs. not married ${formatCurrency(s, false, sym)}`,
-    invertSign: true,
-  },
-  benefits: {
-    agg: (r, health) => r.aggregates.householdBenefits + (health ? r.aggregates.healthcareBenefitValue : 0),
-    desc: (m, s, sym) => `Benefits: married ${formatCurrency(m, false, sym)} vs. not married ${formatCurrency(s, false, sym)}`,
-    invertSign: false,
-  },
-  credits: {
-    agg: (r) => r.aggregates.householdRefundableCredits,
-    desc: (m, s, sym) => `Credits: married ${formatCurrency(m, false, sym)} vs. not married ${formatCurrency(s, false, sym)}`,
-    invertSign: false,
-  },
-};
-
-function HeadlineBanner({ results, showHealth, activeTab, currencySymbol, countryId }) {
-  const [copied, setCopied] = useState(false);
-  const { married, headSingle, spouseSingle } = results;
-  const sym = currencySymbol;
-
-  const tabInfo = TAB_HEADLINE[activeTab] || TAB_HEADLINE.summary;
-  const marriedVal = tabInfo.agg(married, showHealth);
-  const separateVal = tabInfo.agg(headSingle, showHealth) + tabInfo.agg(spouseSingle, showHealth);
-  let delta = marriedVal - separateVal;
-  if (tabInfo.invertSign) delta = -delta;
-
-  const isBonus = delta > 0;
-  const isPenalty = delta < 0;
-  let label;
-  if (isBonus) {
-    label = "Marriage bonus";
-  } else if (isPenalty) {
-    label = "Marriage penalty";
-  } else {
-    label = "No marriage incentive or penalty";
-  }
-
-  function getShareUrl() {
-    const hash = window.location.hash;
-    const isEmbedded = window.self !== window.top;
-    if (isEmbedded) {
-      return `https://policyengine.org/${countryId}/marriage${hash}`;
-    }
-    return window.location.href;
-  }
-
-  function handleShare() {
-    const url = getShareUrl();
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }).catch(() => fallbackCopy(url));
-    } else {
-      fallbackCopy(url);
-    }
-  }
-
-  function fallbackCopy(text) {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    document.body.removeChild(ta);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  const TAB_LABELS = {
-    summary: null,
-    taxes: "taxes only",
-    benefits: "benefits only",
-    credits: "credits only",
-  };
-  const scopeNote = TAB_LABELS[activeTab];
-
-  return (
-    <div
-      className={["headline-banner", isBonus && "bonus", isPenalty && "penalty"].filter(Boolean).join(" ")}
-    >
-      <div className="headline-text">
-        <span className="headline-label">{label}</span>
-        {delta !== 0 && (
-          <span className="headline-amount">
-            {formatCurrency(delta, true, sym)}/yr
-          </span>
-        )}
-        <span className="headline-desc">
-          {tabInfo.desc(marriedVal, separateVal, sym)}
-          {scopeNote && <span className="headline-scope"> ({scopeNote})</span>}
-        </span>
-      </div>
-      <div className="headline-actions">
-        <button
-          className="share-btn"
-          onClick={handleShare}
-          title="Copy link to clipboard"
-        >
-          {copied ? "Copied!" : "Share"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function ResultsDisplay({
   results,
   heatmapData,
@@ -211,6 +95,8 @@ export default function ResultsDisplay({
   onCellClick: onCellClickProp,
   esiStatus,
   country,
+  livingArrangement,
+  hasChildren = false,
 }) {
   const showHealth = !esiStatus?.head && !esiStatus?.spouse;
   const [activeTab, setActiveTab] = useState("summary");
@@ -219,6 +105,10 @@ export default function ResultsDisplay({
 
   const countryId = country.id;
   const sym = country.currencySymbol;
+  const cohabiting = Boolean(results.unmarried);
+  const unmarriedLabel = countryId === "us"
+    ? `Unmarried, ${cohabiting ? "living together" : "living separately"}`
+    : "Not married";
 
   // Filter tabs based on country config
   const visibleTabs = useMemo(
@@ -269,6 +159,7 @@ export default function ResultsDisplay({
   let heatmapGrid = heatmapData?.grids?.[heatmapKey] || null;
   let combinedHeadLine = heatmapData?.headLines?.[heatmapKey];
   let combinedSpouseLine = heatmapData?.spouseLines?.[heatmapKey];
+  let unmarriedGrid = heatmapData?.unmarriedGrids?.[heatmapKey];
 
   if (showHealth && activeTab === "benefits" && heatmapData?.grids && countryId === "us") {
     const benefitsGrid = heatmapData.grids["benefits"];
@@ -284,6 +175,11 @@ export default function ResultsDisplay({
     const bSpouse = heatmapData.spouseLines?.["benefits"];
     const hSpouse = heatmapData.spouseLines?.["healthcare benefits"];
     if (bSpouse && hSpouse) combinedSpouseLine = bSpouse.map((v, i) => v + (hSpouse[i] || 0));
+    const bUnmarried = heatmapData.unmarriedGrids?.["benefits"];
+    const hUnmarried = heatmapData.unmarriedGrids?.["healthcare benefits"];
+    if (bUnmarried && hUnmarried) {
+      unmarriedGrid = bUnmarried.map((row, i) => row.map((v, j) => v + (hUnmarried[i]?.[j] || 0)));
+    }
   }
 
   const HEATMAP_AGG = {
@@ -297,15 +193,13 @@ export default function ResultsDisplay({
   const aggKey = HEATMAP_AGG[heatmapKey];
   let markerDelta = null;
   if (activeTab === "benefits" && showHealth && countryId === "us") {
-    const m = (results.married.aggregates.householdBenefits || 0) + (results.married.aggregates.healthcareBenefitValue || 0);
-    const h = (results.headSingle.aggregates.householdBenefits || 0) + (results.headSingle.aggregates.healthcareBenefitValue || 0);
-    const s = (results.spouseSingle.aggregates.householdBenefits || 0) + (results.spouseSingle.aggregates.healthcareBenefitValue || 0);
-    markerDelta = m - (h + s);
+    const m = (activeResults.married.aggregates.householdBenefits || 0) + (activeResults.married.aggregates.healthcareBenefitValue || 0);
+    const unmarried = unmarriedTotal(activeResults, "aggregates", "householdBenefits")
+      + unmarriedTotal(activeResults, "aggregates", "healthcareBenefitValue");
+    markerDelta = m - unmarried;
   } else if (aggKey) {
-    const m = results.married.aggregates[aggKey] || 0;
-    const h = results.headSingle.aggregates[aggKey] || 0;
-    const s = results.spouseSingle.aggregates[aggKey] || 0;
-    markerDelta = m - (h + s);
+    const m = activeResults.married.aggregates[aggKey] || 0;
+    markerDelta = m - unmarriedTotal(activeResults, "aggregates", aggKey);
     if (heatmapKey === "tax before refundable credits" || heatmapKey === "tax") {
       markerDelta = -markerDelta;
     }
@@ -365,6 +259,8 @@ export default function ResultsDisplay({
     label: heatmapLabel,
     headLine: combinedHeadLine,
     spouseLine: combinedSpouseLine,
+    unmarriedGrid,
+    unmarriedLabel,
     currencySymbol: sym,
     invertDelta: heatmapInvertDelta,
   } : null;
@@ -389,11 +285,15 @@ export default function ResultsDisplay({
 
   return (
     <div className="results">
+      {countryId === "us" && (
+        <h2 className="comparison-heading">{cohabiting ? "Effect of marriage" : "Effect of marrying and combining households"}</h2>
+      )}
       <MetricCards
         results={activeResults}
         showHealth={showHealth}
         currencySymbol={sym}
         countryId={countryId}
+        livingArrangement={livingArrangement || (cohabiting ? "cohabiting" : "separate")}
       />
       <nav className="tab-bar" aria-label="Result categories">
         {visibleTabs.map((tab) => (
@@ -423,7 +323,7 @@ export default function ResultsDisplay({
       <div className="tab-content-single">
         {viewMode === "table" && (
           <div className="single-table">
-            <DataTable rows={rows} emptyMessage={EMPTY_MESSAGES[activeTab]} />
+            <DataTable rows={rows} emptyMessage={EMPTY_MESSAGES[activeTab]} unmarriedLabel={unmarriedLabel} countryId={countryId} />
           </div>
         )}
 
@@ -433,6 +333,17 @@ export default function ResultsDisplay({
           </div>
         )}
       </div>
+      {countryId === "us" && (
+        <p className="comparison-assumptions" role="note" aria-label="Comparison assumptions">
+          {cohabiting
+            ? "The unmarried couple shares a home, food, and resources. SNAP and other modeled household benefits use the same shared resource unit before and after marriage."
+            : "The unmarried adults live in separate homes. These results include changes from combining households as well as marriage. Housing costs and savings from sharing a home are not modeled."}
+          {hasChildren && (cohabiting
+            ? " Children are assumed to be both adults' children; the adult labeled You claims them and pays more than half the cost of keeping up the home."
+            : " All children are assumed to be both adults' children and live with the adult labeled You.")}
+          {cohabiting && hasChildren && " Medicaid estimates use simplified parent/caretaker rules and may misstate eligibility for unmarried parents living together."}
+        </p>
+      )}
     </div>
   );
 }
