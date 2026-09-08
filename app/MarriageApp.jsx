@@ -13,7 +13,7 @@ const BASE_PATH =
     : process.env.NEXT_PUBLIC_BASE_PATH || "/us/marriage";
 
 // URL state helpers
-function encodeToHash(countryId, formData, isEmbedded) {
+export function encodeToHash(countryId, formData, isEmbedded) {
   const country = getCountry(countryId);
   const p = new URLSearchParams();
   // Always record the country. Leaving it out to keep the default short made
@@ -40,9 +40,8 @@ function encodeToHash(countryId, formData, isEmbedded) {
   }
   if (formData.esiStatus?.head) p.set("he", "1");
   if (formData.esiStatus?.spouse) p.set("se", "1");
-  if (formData.year && formData.year !== country.defaultYear) {
-    p.set("year", formData.year);
-  }
+  p.set("year", formData.year || country.defaultYear);
+  if (countryId === "us") p.set("living", formData.livingArrangement || "cohabiting");
   // UK Universal Credit inputs. Only written when non-default so existing
   // shared links keep their current shape.
   if (formData.rent) p.set("rent", formData.rent);
@@ -61,7 +60,7 @@ function encodeToHash(countryId, formData, isEmbedded) {
   return p.toString();
 }
 
-function decodeFromHash() {
+export function decodeFromHash() {
   if (typeof window === "undefined") return null;
   const hash = window.location.hash.slice(1);
   if (!hash) return null;
@@ -106,6 +105,9 @@ function decodeFromHash() {
       },
       children,
       year: p.get("year") || country.defaultYear,
+      // Links created before this choice existed compared separate homes.
+      livingArrangement: countryId === "us" && p.get("living") === "cohabiting"
+        ? "cohabiting" : "separate",
       rent: Number(p.get("rent") || 0),
       tenureType: p.get("tenure") || "OWNED_OUTRIGHT",
       brma: p.get("brma") || DEFAULT_BRMA,
@@ -149,6 +151,7 @@ export default function MarriageApp({ initialCountry = null }) {
   const [externalIncomes, setExternalIncomes] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const didAutoCalc = useRef(false);
+  const calculationId = useRef(0);
 
   // Resolve browser-only state after mount.
   // initialCountry already seeded countryId (for the rewrite path), so it
@@ -216,27 +219,43 @@ export default function MarriageApp({ initialCountry = null }) {
 
   // Clear results when country changes
   function handleCountryChange(newId) {
+    decoded.current = null;
     setCountryId(newId);
-    setResults(null);
-    setHeatmapData(null);
+    clearResults();
     setFormData(null);
-    setError(null);
   }
 
-  async function handleCalculate(data) {
-    setFormData(data);
+  function clearResults() {
+    // A request from the previous living arrangement must not repopulate the
+    // page after an input has changed.
+    calculationId.current += 1;
+    setResults(null);
+    setHeatmapData(null);
+    setLoading(false);
+    setHeatmapLoading(false);
+    setError(null);
+    setExternalIncomes(null);
+  }
+
+  function updateHash(data) {
     const hash = `#${encodeToHash(countryId, data, isEmbedded)}`;
     window.history.replaceState(null, "", hash);
     if (window.self !== window.top) {
       window.parent.postMessage({ type: "hashchange", hash }, "*");
     }
+  }
+
+  async function handleCalculate(data) {
+    const requestId = ++calculationId.current;
+    setFormData(data);
+    updateHash(data);
 
     const {
       headIncome, spouseIncome, headAge, spouseAge,
       children, disabilityStatus, pregnancyStatus, esiStatus, year,
     } = data;
-    // UK-only inputs, ignored by the US situation builder.
     const extras = {
+      livingArrangement: data.livingArrangement || "cohabiting",
       rent: data.rent || 0,
       tenureType: data.tenureType || "OWNED_OUTRIGHT",
       brma: data.brma || DEFAULT_BRMA,
@@ -261,6 +280,7 @@ export default function MarriageApp({ initialCountry = null }) {
         disabilityStatus, year, pregnancyStatus, headAge, spouseAge,
         esiStatus, inNYC, extras,
       );
+      if (requestId !== calculationId.current) return;
       setResults(result);
       setLoading(false);
 
@@ -271,13 +291,15 @@ export default function MarriageApp({ initialCountry = null }) {
           pregnancyStatus, headIncome, spouseIncome, headAge, spouseAge,
           esiStatus, inNYC, extras,
         );
+        if (requestId !== calculationId.current) return;
         setHeatmapData(heatmap);
       } catch (e) {
         console.error("Heatmap error:", e);
       } finally {
-        setHeatmapLoading(false);
+        if (requestId === calculationId.current) setHeatmapLoading(false);
       }
     } catch (e) {
+      if (requestId !== calculationId.current) return;
       setError(e.message);
       setLoading(false);
     }
@@ -285,6 +307,9 @@ export default function MarriageApp({ initialCountry = null }) {
 
   function handleCellClick(headIncome, spouseIncome) {
     setExternalIncomes({ headIncome, spouseIncome });
+    const data = { ...formData, headIncome, spouseIncome };
+    setFormData(data);
+    updateHash(data);
   }
 
   // Auto-calculate if URL has params on first load
@@ -341,12 +366,13 @@ export default function MarriageApp({ initialCountry = null }) {
             )}
             <div className="sidebar-collapsible">
               <InputForm
+                key={mounted ? "ready" : "initial"}
                 country={country}
                 countries={isEmbedded ? null : COUNTRIES}
                 countryId={countryId}
                 onCountryChange={handleCountryChange}
                 onCalculate={(data) => { setSidebarOpen(false); handleCalculate(data); }}
-                onInputChange={() => { setResults(null); setHeatmapData(null); }}
+                onInputChange={clearResults}
                 loading={loading}
                 initialValues={decoded.current}
                 externalIncomes={externalIncomes}
@@ -370,7 +396,7 @@ export default function MarriageApp({ initialCountry = null }) {
                   <p>
                     Tax and benefit rules can reward or punish marriage. Enter
                     your household details on the left and we&rsquo;ll compare
-                    your net income if you stay single or tie the knot, program
+                    your net income if you stay unmarried or tie the knot, program
                     by program.
                   </p>
                   <ul className="intro-highlights">
@@ -394,6 +420,8 @@ export default function MarriageApp({ initialCountry = null }) {
                 onCellClick={handleCellClick}
                 esiStatus={formData?.esiStatus}
                 country={country}
+                livingArrangement={formData?.livingArrangement}
+                hasChildren={Boolean(formData?.children?.length)}
               />
             )}
           </main>

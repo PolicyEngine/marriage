@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { isRentedTenure } from "@/lib/api";
 import { formatYearLabel } from "@/lib/utils";
 import { UK_BRMAS, DEFAULT_BRMA } from "@/lib/countries";
+import FormSelect from "./FormSelect";
 
 function formatIncome(value) {
   const num = typeof value === "number" ? value : parseNumber(value);
@@ -53,6 +54,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     (iv.children || []).map((c) => ({ ...c, age: String(c.age) })),
   );
   const [year, setYear] = useState(iv.year || country.defaultYear);
+  const [livingArrangement, setLivingArrangement] = useState(iv.livingArrangement || "cohabiting");
   // UK Universal Credit inputs. Each maps to an element of uc_maximum_amount
   // or a means-test component; see lib/api.js createUKSituation.
   const [rent, setRent] = useState(formatIncome(iv.rent != null ? iv.rent : 0));
@@ -77,7 +79,8 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     formatIncome(iv.pensionIncome?.spouse || 0),
   );
   const [errors, setErrors] = useState({});
-  const hasMounted = useRef(false);
+  const previousInputs = useRef(null);
+  const syncedIncomes = useRef(null);
   const childrenKey = children.map((c) => `${c.age}:${c.isDisabled}`).join(",");
   const adultInputs = ["age"];
   if (country.hasDisability) adultInputs.push("disability");
@@ -127,8 +130,21 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   const assumptions = [
     `The calculator uses only the inputs shown here: ${country.regionLabel.toLowerCase()}, year, each adult's wages, ${joinWithAnd(adultInputs)}${householdInputs.length ? `, the household's ${joinWithAnd(householdInputs)}` : ""}, and each child's ${country.hasDisability && country.id !== "uk" ? "age and disability" : "age"}.`,
     `Earnings mean wages and salaries only. ${capitaliseFirst(joinWithAnd([...omitted, "other omitted inputs"]))} are assumed to be zero.`,
-    `For the ${separateLabel} comparison, all children are assigned to you and your partner is simulated separately without children.`,
   ];
+  if (country.id === "us") {
+    assumptions.push("All children are assumed to be both adults' children.");
+  }
+  if (country.id === "us" && livingArrangement === "cohabiting") {
+    assumptions.push(
+      "Living together, you share a home, buy and prepare food together, and share resources. SNAP and other modeled household benefits use a shared resource unit in both scenarios.",
+      "For unmarried taxes, all children are assigned to you, and your partner files separately. You pay more than half the cost of keeping up the home, allowing head-of-household filing when otherwise eligible.",
+    );
+  } else {
+    assumptions.push(`For the ${separateLabel} comparison, all children are assigned to you and your partner is simulated separately without children.`);
+  }
+  if (country.id === "us" && livingArrangement === "separate") {
+    assumptions.push("This comparison includes the effect of combining households as well as marriage. Housing costs and savings from sharing a home are not modeled.");
+  }
   if (country.id === "uk") {
     assumptions.push(
       "The UK assesses couples on whether they live together, not on marriage. This compares a cohabiting couple with two separate households.",
@@ -158,6 +174,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       prevCountryId.current = country.id;
       setRegionCode(country.defaultRegion);
       setYear(country.defaultYear);
+      setLivingArrangement("cohabiting");
       setHeadAge(String(country.defaultAge));
       setSpouseAge(String(country.defaultAge));
       if (!country.hasDisability) {
@@ -196,16 +213,26 @@ export default function InputForm({ country, countries, countryId, onCountryChan
 
   // Clear stale results when inputs change (but not on initial mount)
   useEffect(() => {
-    if (!hasMounted.current) {
-      hasMounted.current = true;
-      return;
+    const inputs = [regionCode, headIncome, spouseIncome, headAge, spouseAge,
+      headDisabled, spouseDisabled, headPregnant, spousePregnant, headESI, spouseESI, year, childrenKey, livingArrangement,
+      rent, tenureType, brma, childcareCosts, savings,
+      headCarer, spouseCarer, headSelfEmp, spouseSelfEmp, headPension, spousePension];
+    const previous = previousInputs.current;
+    previousInputs.current = inputs;
+    // Strict Mode repeats mount effects. Only an actual value change should
+    // cancel a pending calculation, including one restored from a shared link.
+    if (!previous || inputs.every((value, i) => value === previous[i])) return;
+    if (syncedIncomes.current) {
+      const synced = syncedIncomes.current;
+      syncedIncomes.current = null;
+      if (headIncome === synced.headIncome && spouseIncome === synced.spouseIncome) return;
     }
     if (onInputChange) onInputChange();
   }, [regionCode, headIncome, spouseIncome, headAge, spouseAge,
-    headDisabled, spouseDisabled, headESI, spouseESI, year, childrenKey,
+    headDisabled, spouseDisabled, headPregnant, spousePregnant, headESI, spouseESI, year, childrenKey, livingArrangement,
     rent, tenureType, brma, childcareCosts, savings,
     headCarer, spouseCarer, headSelfEmp, spouseSelfEmp,
-    headPension, spousePension]);
+    headPension, spousePension, onInputChange]);
 
   function buildFormData() {
     return {
@@ -220,6 +247,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       pregnancyStatus: { head: headPregnant, spouse: spousePregnant },
       esiStatus: { head: headESI, spouse: spouseESI },
       year,
+      livingArrangement: country.id === "us" ? livingArrangement : "separate",
       rent: rentsApply ? parseNumber(rent) : 0,
       tenureType,
       brma,
@@ -240,9 +268,16 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   // Sync income fields when heatmap cell is clicked
   useEffect(() => {
     if (externalIncomes) {
-      setHeadIncome(formatIncome(externalIncomes.headIncome));
-      setSpouseIncome(formatIncome(externalIncomes.spouseIncome));
+      const nextHead = formatIncome(externalIncomes.headIncome);
+      const nextSpouse = formatIncome(externalIncomes.spouseIncome);
+      if (nextHead !== headIncome || nextSpouse !== spouseIncome) {
+        syncedIncomes.current = { headIncome: nextHead, spouseIncome: nextSpouse };
+        setHeadIncome(nextHead);
+        setSpouseIncome(nextSpouse);
+      }
     }
+    // Only external selections trigger a sync; user edits must remain editable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalIncomes]);
 
   function setError(field, msg) {
@@ -310,22 +345,42 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       )}
       <div className="sf-row">
         <div className="sf-field sf-grow">
-          <label>{country.regionLabel}</label>
-          <select value={regionCode} onChange={(e) => setRegionCode(e.target.value)}>
-            {country.regions.map((s) => (
-              <option key={s.code} value={s.code}>{s.name}</option>
-            ))}
-          </select>
+          <label htmlFor="region">{country.regionLabel}</label>
+          <FormSelect
+            id="region"
+            label={country.regionLabel}
+            value={regionCode}
+            onValueChange={setRegionCode}
+            options={country.regions.map((region) => ({ value: region.code, label: region.name }))}
+          />
         </div>
         <div className="sf-field sf-year">
-          <label>Year</label>
-          <select value={year} onChange={(e) => setYear(e.target.value)}>
-            {country.availableYears.map((y) => (
-              <option key={y} value={y}>{formatYearLabel(y)}</option>
-            ))}
-          </select>
+          <label htmlFor="year">Year</label>
+          <FormSelect
+            id="year"
+            label="Year"
+            value={year}
+            onValueChange={setYear}
+            options={country.availableYears.map((year) => ({ value: year, label: formatYearLabel(year, country.id) }))}
+          />
         </div>
       </div>
+
+      {country.id === "us" && (
+        <div className="sf-field">
+          <label htmlFor="living-arrangement">Unmarried living arrangement</label>
+          <FormSelect
+            id="living-arrangement"
+            label="Unmarried living arrangement"
+            value={livingArrangement}
+            onValueChange={setLivingArrangement}
+            options={[
+              { value: "cohabiting", label: "Living together" },
+              { value: "separate", label: "Living separately" },
+            ]}
+          />
+        </div>
+      )}
 
       <PersonSection
         title="You"
@@ -480,20 +535,26 @@ export default function InputForm({ country, countries, countryId, onCountryChan
                 <div className="sf-group-title">Housing</div>
                 <div className="sf-row">
                   <div className="sf-field sf-grow">
-                    <label className="sf-label-tip">
+                    <label htmlFor="tenure" className="sf-label-tip">
                       Tenure
                       <span className="sf-label-tooltip">
                         Private rent is capped at the Local Housing Allowance
                         rate. Social rent is not. Owners get no housing element.
                       </span>
                     </label>
-                    <select value={tenureType} onChange={(e) => setTenureType(e.target.value)}>
-                      <option value="OWNED_OUTRIGHT">Owned outright</option>
-                      <option value="OWNED_WITH_MORTGAGE">Owned with a mortgage</option>
-                      <option value="RENT_PRIVATELY">Rented privately</option>
-                      <option value="RENT_FROM_COUNCIL">Rented from council</option>
-                      <option value="RENT_FROM_HA">Rented from housing association</option>
-                    </select>
+                    <FormSelect
+                      id="tenure"
+                      label="Tenure"
+                      value={tenureType}
+                      onValueChange={setTenureType}
+                      options={[
+                        { value: "OWNED_OUTRIGHT", label: "Owned outright" },
+                        { value: "OWNED_WITH_MORTGAGE", label: "Owned with a mortgage" },
+                        { value: "RENT_PRIVATELY", label: "Rented privately" },
+                        { value: "RENT_FROM_COUNCIL", label: "Rented from council" },
+                        { value: "RENT_FROM_HA", label: "Rented from housing association" },
+                      ]}
+                    />
                   </div>
                   <div className="sf-field sf-money">
                     <label className="sf-label-tip">
@@ -524,7 +585,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
 
             {country.hasHousing && tenureType === "RENT_PRIVATELY" && (
               <div className="sf-field">
-                <label className="sf-label-tip">
+                <label htmlFor="rental-market-area" className="sf-label-tip">
                   Rental market area
                   <span className="sf-label-tooltip">
                     Private rent is capped at the Local Housing Allowance rate
@@ -532,11 +593,13 @@ export default function InputForm({ country, countries, countryId, onCountryChan
                     Social rent is not capped, so this does not apply there.
                   </span>
                 </label>
-                <select value={brma} onChange={(e) => setBrma(e.target.value)}>
-                  {UK_BRMAS.map((a) => (
-                    <option key={a.code} value={a.code}>{a.name}</option>
-                  ))}
-                </select>
+                <FormSelect
+                  id="rental-market-area"
+                  label="Rental market area"
+                  value={brma}
+                  onValueChange={setBrma}
+                  options={UK_BRMAS.map((area) => ({ value: area.code, label: area.name }))}
+                />
               </div>
             )}
 
@@ -804,6 +867,7 @@ function PersonSection({
             <input
               type="text"
               inputMode="numeric"
+              aria-label={`${title} income`}
               value={income}
               className={incomeError ? "input-error" : ""}
               onChange={(e) => onIncomeChange(e.target.value)}
@@ -818,6 +882,7 @@ function PersonSection({
             type="number"
             min="18"
             max="100"
+            aria-label={`${title} age`}
             value={age}
             className={ageError ? "input-error" : ""}
             onChange={(e) => onAgeChange(e.target.value)}

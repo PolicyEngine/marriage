@@ -27,6 +27,8 @@ export default function Heatmap({
   label = "Net Change",
   headLine,
   spouseLine,
+  unmarriedGrid,
+  unmarriedLabel = "Not married",
   currencySymbol = "$",
   invertDelta = false,
 }) {
@@ -79,7 +81,7 @@ export default function Heatmap({
     return <p className="loading">No heatmap data available.</p>;
   }
   if (grid.every((row) => row.every((v) => v === 0))) {
-    return <p className="loading">No changes in the net income data.</p>;
+    return <p className="loading">No changes in {label.toLowerCase()} at these income levels.</p>;
   }
 
   const step = maxIncome / (count - 1);
@@ -92,7 +94,8 @@ export default function Heatmap({
 
   const accentColor = valentine ? "#BE185D" : "#D97706";
   const hasBeforeAfter =
-    headLine && spouseLine && headLine.length === count && spouseLine.length === count;
+    unmarriedGrid?.length === count ||
+    (headLine && spouseLine && headLine.length === count && spouseLine.length === count);
 
   // Marker position
   const defaultXi = Math.min(count - 1, Math.max(0, Math.round(headIncome / step)));
@@ -150,7 +153,9 @@ export default function Heatmap({
       delta: val,
     };
     if (hasBeforeAfter) {
-      data.notMarried = Math.round(headLine[hi] || 0) + Math.round(spouseLine[si] || 0);
+      data.notMarried = unmarriedGrid
+        ? unmarriedGrid[si]?.[hi] || 0
+        : Math.round(headLine[hi] || 0) + Math.round(spouseLine[si] || 0);
       data.married = data.notMarried + rawDelta;
     }
     // Which programs drive the gap here, not just how big it is.
@@ -171,7 +176,7 @@ export default function Heatmap({
   const barY = MARGIN.top + (plotH - barH) / 2;
 
   // Compute nice round tick values for the color bar
-  const barTicks = useMemo(() => {
+  const barTicks = (() => {
     if (absMax === 0) return [{ val: 0, y: barY + barH / 2 }];
     const rawStep = absMax / 2;
     const order = Math.pow(10, Math.floor(Math.log10(rawStep)));
@@ -187,7 +192,7 @@ export default function Heatmap({
       val,
       y: barY + barH * (1 - (val + absMax) / (2 * absMax)),
     }));
-  }, [absMax, barY, barH]);
+  })();
 
   // Marker geometry
   const mx = cx(xi) + cellW / 2;
@@ -482,7 +487,7 @@ export default function Heatmap({
                   }}
                 />
                 <div>
-                  Not married: {fmtDollar(tooltip.notMarried, currencySymbol)}
+                  {unmarriedLabel}: {fmtDollar(tooltip.notMarried, currencySymbol)}
                 </div>
                 <div>
                   Married: {fmtDollar(tooltip.married, currencySymbol)}
