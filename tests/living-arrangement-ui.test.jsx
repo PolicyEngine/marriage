@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
 import { render, screen, fireEvent, cleanup, act, within } from "@testing-library/react";
 import MarriageApp, { encodeToHash, decodeFromHash } from "../app/MarriageApp.jsx";
 import InputForm from "../app/components/InputForm.jsx";
@@ -35,13 +35,22 @@ const scenario = (net, snap = 0) => ({
 const cohabitingResults = { married: scenario(33000, 2000), unmarried: scenario(35000, 2000) };
 const separateResults = { married: scenario(33000), headSingle: scenario(20000), spouseSingle: scenario(15000) };
 
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+beforeAll(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); });
+afterAll(() => { HTMLElement.prototype.scrollIntoView = originalScrollIntoView; });
+
+async function selectLivingSeparately() {
+  fireEvent.keyDown(screen.getByRole("combobox", { name: "Unmarried living arrangement" }), { key: "ArrowDown" });
+  fireEvent.click(await screen.findByRole("option", { name: "Living separately" }));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.history.replaceState(null, "", "/");
   getCategorizedPrograms.mockResolvedValue(cohabitingResults);
   getHeatmapData.mockResolvedValue(null);
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("comparison share links", () => {
   it.each(["cohabiting", "separate"])("round-trips the %s comparison and its year", (livingArrangement) => {
@@ -68,7 +77,7 @@ describe("comparison share links", () => {
     window.history.replaceState(null, "", "#region=CA&head=20000&spouse=15000");
     render(<React.StrictMode><MarriageApp initialCountry="us" /></React.StrictMode>);
     await screen.findByRole("heading", { name: "Effect of marrying and combining households" });
-    expect(screen.getByLabelText("Unmarried living arrangement").value).toBe("separate");
+    expect(screen.getByLabelText("Unmarried living arrangement").textContent).toBe("Living separately");
     expect(screen.getByRole("textbox", { name: "You income" }).value).toBe("20,000");
     expect(getCategorizedPrograms.mock.calls[0][12].livingArrangement).toBe("separate");
     expect(new URLSearchParams(window.location.hash.slice(1)).get("living")).toBe("separate");
@@ -78,15 +87,15 @@ describe("comparison share links", () => {
 describe("living arrangement form", () => {
   const baseProps = { country: COUNTRIES.us, countryId: "us", onCalculate: vi.fn(), loading: false };
 
-  it("defaults new US visits to living together and sends the selected comparison", () => {
+  it("defaults new US visits to living together and sends the selected comparison", async () => {
     const onCalculate = vi.fn();
     const onInputChange = vi.fn();
     render(<InputForm {...baseProps} onCalculate={onCalculate} onInputChange={onInputChange} />);
     const choice = screen.getByLabelText("Unmarried living arrangement");
-    expect(choice.value).toBe("cohabiting");
+    expect(choice.textContent).toBe("Living together");
     fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
     expect(onCalculate.mock.calls[0][0].livingArrangement).toBe("cohabiting");
-    fireEvent.change(choice, { target: { value: "separate" } });
+    await selectLivingSeparately();
     expect(onInputChange).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
     expect(onCalculate.mock.calls[1][0].livingArrangement).toBe("separate");
@@ -114,7 +123,7 @@ describe("living arrangement form", () => {
     getCategorizedPrograms.mockImplementationOnce(() => new Promise((r) => { resolve = r; }));
     render(<MarriageApp initialCountry="us" />);
     fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
-    fireEvent.change(screen.getByLabelText("Unmarried living arrangement"), { target: { value: "separate" } });
+    await selectLivingSeparately();
     await act(async () => { resolve(cohabitingResults); });
     expect(screen.queryByTestId("metric-net")).toBeNull();
     expect(getHeatmapData).not.toHaveBeenCalled();
@@ -142,6 +151,23 @@ describe("comparison results", () => {
     expect(screen.getByRole("columnheader", { name: "You (unmarried)" })).toBeTruthy();
     expect(screen.getByTestId("metric-delta").textContent).toContain("Decrease");
     expect(screen.getByTestId("metric-delta").textContent).not.toContain("Marriage penalty");
+  });
+
+  it("keeps keyboard-accessible program explanations outside the scrolling table", async () => {
+    // jsdom has no layout observer; the browser supplies this for positioning.
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    render(<ResultsDisplay {...props} results={cohabitingResults} />);
+    fireEvent.click(screen.getByRole("button", { name: "Benefits" }));
+    const label = screen.getByText("SNAP");
+    expect(label.tabIndex).toBe(0);
+    fireEvent.focus(label);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip.textContent).toContain("buy and prepare food together");
+    expect(screen.getByRole("region", { name: "Tax and benefit comparison" }).contains(tooltip)).toBe(false);
   });
 
   it("keeps comparison methodology in the app results instead of shared chrome", () => {

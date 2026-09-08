@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, Suspense, lazy } from "react";
 import { computeTableData, unmarriedTotal, PROGRAM_DESCRIPTIONS } from "@/lib/utils";
 import { buildCellResults, buildCellBreakdown } from "@/lib/api";
 import MetricCards from "./MetricCards";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@policyengine/ui-kit/primitives";
 
 const Heatmap = lazy(() => import("./Heatmap"));
 
@@ -44,7 +45,8 @@ function DataTable({ rows, emptyMessage, unmarriedLabel = "Not married", country
   ];
 
   return (
-    <div className="table-scroll">
+    <TooltipProvider>
+    <div className="table-scroll" tabIndex={0} role="region" aria-label="Tax and benefit comparison">
       <table className="data-table">
         <thead>
           <tr>
@@ -59,12 +61,14 @@ function DataTable({ rows, emptyMessage, unmarriedLabel = "Not married", country
             <tr key={i} className={row.isTotal ? "total-row" : ""}>
               <td className="row-label">
                 {PROGRAM_DESCRIPTIONS[row.program] ? (
-                  <span className="program-name-tip">
-                    {row.program}
-                    <span className="tooltip">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="program-name-tip" tabIndex={0}>{row.program}</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" align="start" className="max-w-80 whitespace-normal">
                       {PROGRAM_DESCRIPTIONS[row.program]}
-                    </span>
-                  </span>
+                    </TooltipContent>
+                  </Tooltip>
                 ) : (
                   row.program
                 )}
@@ -82,6 +86,7 @@ function DataTable({ rows, emptyMessage, unmarriedLabel = "Not married", country
         </tbody>
       </table>
     </div>
+    </TooltipProvider>
   );
 }
 

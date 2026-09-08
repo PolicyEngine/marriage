@@ -5,10 +5,15 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeAll, afterAll } from "vitest";
 import React from "react";
-import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within, waitFor } from "@testing-library/react";
 import MetricCards from "../app/components/MetricCards.jsx";
+import { COUNTRIES, UK_BRMAS } from "../lib/countries.js";
+
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+beforeAll(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); });
+afterAll(() => { HTMLElement.prototype.scrollIntoView = originalScrollIntoView; });
 
 afterEach(cleanup);
 
@@ -178,14 +183,47 @@ describe("Country toggle", () => {
     expect(buttons[1].className).not.toContain("active");
   });
 
-  it("renders year as a select dropdown", async () => {
+  it("uses the shared year dropdown and supports keyboard selection without submitting", async () => {
     const { default: InputForm } = await import("../app/components/InputForm.jsx");
-    render(<InputForm country={country} countries={countries} countryId="us" onCountryChange={() => {}} onCalculate={() => {}} loading={false} />);
+    const onCalculate = vi.fn();
+    render(<InputForm country={country} countries={countries} countryId="us" onCountryChange={() => {}} onCalculate={onCalculate} loading={false} />);
 
-    const yearSelect = document.querySelector(".sf-year select");
-    expect(yearSelect).toBeTruthy();
-    expect(yearSelect.value).toBe("2026");
-    expect(yearSelect.options.length).toBe(3);
+    const yearSelect = screen.getByRole("combobox", { name: "Year" });
+    expect(yearSelect.getAttribute("data-slot")).toBe("select-trigger");
+    expect(yearSelect.textContent).toBe("2026");
+    fireEvent.keyDown(yearSelect, { key: "ArrowDown" });
+    const selectedOption = await screen.findByRole("option", { name: "2026" });
+    expect(screen.getAllByRole("option")).toHaveLength(3);
+    await waitFor(() => expect(document.activeElement).toBe(selectedOption));
+    fireEvent.keyDown(selectedOption, { key: "ArrowUp" });
+    const previousYear = screen.getByRole("option", { name: "2025" });
+    await waitFor(() => expect(document.activeElement).toBe(previousYear));
+    fireEvent.keyDown(previousYear, { key: "Enter" });
+    expect(yearSelect.textContent).toBe("2025");
+    expect(onCalculate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+    expect(onCalculate.mock.calls[0][0].year).toBe("2025");
+  });
+
+  it("uses shared dropdowns for UK region, fiscal year, tenure, and rental market area", async () => {
+    const { default: InputForm } = await import("../app/components/InputForm.jsx");
+    const onCalculate = vi.fn();
+    render(<InputForm country={COUNTRIES.uk} countryId="uk" onCalculate={onCalculate} loading={false} />);
+    fireEvent.click(screen.getByText("More details"));
+    for (const name of [COUNTRIES.uk.regionLabel, "Year", "Tenure"]) {
+      expect(screen.getByRole("combobox", { name }).getAttribute("data-slot")).toBe("select-trigger");
+    }
+    expect(screen.getByRole("combobox", { name: "Year" }).textContent).toBe("2026-27");
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Tenure" }), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "Rented privately" }));
+    const area = screen.getByRole("combobox", { name: "Rental market area" });
+    expect(area.getAttribute("data-slot")).toBe("select-trigger");
+    fireEvent.keyDown(area, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: UK_BRMAS[0].name }));
+    fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+    expect(onCalculate.mock.calls[0][0]).toMatchObject({
+      tenureType: "RENT_PRIVATELY", brma: UK_BRMAS[0].code, year: "2026",
+    });
   });
 
   it("renders a collapsed assumptions summary", async () => {

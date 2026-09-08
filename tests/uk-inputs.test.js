@@ -229,14 +229,16 @@ describe("UK years", () => {
 });
 
 describe("year labels", () => {
-  it("renders both countries as a span, e.g. 2026-27", () => {
-    expect(formatYearLabel("2026")).toBe("2026-27");
-    expect(formatYearLabel("2027")).toBe("2027-28");
-    expect(formatYearLabel("2029")).toBe("2029-30");
+  it("renders US calendar years and UK tax-year spans", () => {
+    expect(formatYearLabel("2026", "us")).toBe("2026");
+    expect(formatYearLabel("2026")).toBe("2026");
+    expect(formatYearLabel("2026", "uk")).toBe("2026-27");
+    expect(formatYearLabel("2027", "uk")).toBe("2027-28");
+    expect(formatYearLabel("2029", "uk")).toBe("2029-30");
   });
 
   it("pads the century rollover rather than showing a single digit", () => {
-    expect(formatYearLabel("2099")).toBe("2099-00");
+    expect(formatYearLabel("2099", "uk")).toBe("2099-00");
   });
 
   it("passes through anything that is not a year", () => {
@@ -247,7 +249,7 @@ describe("year labels", () => {
   it("covers every year both countries offer", () => {
     for (const c of [COUNTRIES.uk, COUNTRIES.us]) {
       for (const y of c.availableYears) {
-        expect(formatYearLabel(y)).toMatch(/^\d{4}-\d{2}$/);
+        expect(formatYearLabel(y, c.id)).toMatch(c.id === "uk" ? /^\d{4}-\d{2}$/ : /^\d{4}$/);
       }
     }
   });
