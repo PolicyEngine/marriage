@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSituation, getCategorizedPrograms, getHeatmapData, buildCellResults, buildCellBreakdown } from "../lib/api";
 import { computeTableData, unmarriedTotal } from "../lib/utils";
+import metadata from "../lib/metadata.json";
 
 const extras = { livingArrangement: "cohabiting" };
 const situation = (options = extras) => createSituation(
@@ -34,7 +35,7 @@ function mockApi() {
         }
       });
     }
-    return { ok: true, json: async () => ({ result: s }) };
+    return { ok: true, json: async () => ({ result: s, model_version: metadata.modelVersion }) };
   }));
   return requests;
 }

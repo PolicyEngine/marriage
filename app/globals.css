@@ -1980,3 +1980,20 @@ body footer .grid > div {
 .tab-panel {
   overflow: visible;
 }
+
+/* Optional US assistance inputs share the form's colors and spacing. */
+.sf-input-note {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  margin: 0.35rem 0 0.65rem;
+}
+
+.sf-child--us { flex-wrap: wrap; border-radius: var(--radius-md); }
+.sf-child--us .sf-toggle { flex: 1; min-width: 0; white-space: normal; }
+.sf-childcare-fields { display: grid; gap: 0.55rem; margin-bottom: 0.8rem; }
+.sf-childcare-child { display: grid; gap: 0.6rem; min-width: 0; border: 0; border-top: 1px solid var(--color-border-light); padding: 0.6rem 0 0; }
+.sf-childcare-child legend { color: var(--color-heading); font-size: 0.8rem; font-weight: 600; padding-right: 0.5rem; }
+.sf-us-childcare .sf-toggle { white-space: normal; align-items: flex-start; }
+.sf-us-childcare .sf-toggle-track { margin-top: 0.05rem; flex-shrink: 0; }
+.sf-childcare-error { color: var(--color-danger); font-size: 0.8rem; line-height: 1.4; margin-top: 0.5rem; }

@@ -41,7 +41,24 @@ export function encodeToHash(countryId, formData, isEmbedded) {
   if (formData.esiStatus?.head) p.set("he", "1");
   if (formData.esiStatus?.spouse) p.set("se", "1");
   p.set("year", formData.year || country.defaultYear);
-  if (countryId === "us") p.set("living", formData.livingArrangement || "cohabiting");
+  if (countryId === "us") {
+    p.set("living", formData.livingArrangement || "cohabiting");
+    if (formData.ccdfSlotAvailable === false) p.set("ccdf_slot", "0");
+    if (formData.childcareCounty) p.set("county", formData.childcareCounty);
+    if (formData.childcareWorkHours?.head != null && formData.childcareWorkHours.head !== 40) p.set("hwh", formData.childcareWorkHours.head);
+    if (formData.childcareWorkHours?.spouse != null && formData.childcareWorkHours.spouse !== 40) p.set("swh", formData.childcareWorkHours.spouse);
+    if (formData.includeHeadStart) p.set("hs", "1");
+    if ((formData.regionCode || formData.stateCode) === "NV" && formData.childcareActivityEligible) p.set("cae", "1");
+    const childDetails = formData.children.map((child) => ({
+      ...(child.isHeadStartEnrolled ? { isHeadStartEnrolled: true } : {}),
+      ...(child.childcareCost ? { childcareCost: child.childcareCost } : {}),
+      ...(child.childcareHoursPerDay != null && child.childcareHoursPerDay !== 8 ? { childcareHoursPerDay: child.childcareHoursPerDay } : {}),
+      ...(child.childcareDaysPerWeek != null && child.childcareDaysPerWeek !== 5 ? { childcareDaysPerWeek: child.childcareDaysPerWeek } : {}),
+      ...(child.childcareDaysPerMonth != null && child.childcareDaysPerMonth !== 22 ? { childcareDaysPerMonth: child.childcareDaysPerMonth } : {}),
+      ...(Object.keys(child.childcareProviders || {}).length ? { childcareProviders: child.childcareProviders } : {}),
+    }));
+    if (childDetails.some((child) => Object.keys(child).length)) p.set("care", JSON.stringify(childDetails));
+  }
   // UK Universal Credit inputs. Only written when non-default so existing
   // shared links keep their current shape.
   if (formData.rent) p.set("rent", formData.rent);
@@ -82,6 +99,19 @@ export function decodeFromHash() {
             return { age: Number(age), isDisabled: dis === "1" };
           })
       : [];
+    if (countryId === "us" && p.has("care")) {
+      const details = JSON.parse(p.get("care"));
+      if (Array.isArray(details)) children.forEach((child, index) => {
+        const detail = details[index] || {};
+        child.isHeadStartEnrolled = detail.isHeadStartEnrolled === true;
+        for (const key of ["childcareCost", "childcareHoursPerDay", "childcareDaysPerWeek", "childcareDaysPerMonth"]) {
+          if (detail[key] != null && Number.isFinite(Number(detail[key]))) child[key] = Math.max(0, Number(detail[key]));
+        }
+        if (detail.childcareProviders && typeof detail.childcareProviders === "object" && !Array.isArray(detail.childcareProviders)) {
+          child.childcareProviders = Object.fromEntries(Object.entries(detail.childcareProviders).filter(([, value]) => typeof value === "string"));
+        }
+      });
+    }
     const resolvedRegion = region === "NY" && p.get("nyc") === "1" ? "NYC" : region;
     return {
       countryId,
@@ -95,6 +125,13 @@ export function decodeFromHash() {
         head: p.get("hd") === "1",
         spouse: p.get("sd") === "1",
       },
+      ...(countryId === "us" ? {
+        ccdfSlotAvailable: p.get("ccdf_slot") !== "0",
+        childcareCounty: p.get("county") || "",
+        childcareWorkHours: { head: Number(p.get("hwh") ?? 40), spouse: Number(p.get("swh") ?? 40) },
+        includeHeadStart: p.get("hs") === "1",
+        childcareActivityEligible: resolvedRegion === "NV" && p.get("cae") === "1",
+      } : {}),
       pregnancyStatus: {
         head: p.get("hp") === "1",
         spouse: p.get("sp") === "1",
@@ -264,6 +301,11 @@ export default function MarriageApp({ initialCountry = null }) {
       carerStatus: data.carerStatus || {},
       selfEmploymentIncome: data.selfEmploymentIncome || {},
       pensionIncome: data.pensionIncome || {},
+      ccdfSlotAvailable: data.ccdfSlotAvailable !== false,
+      childcareCounty: data.childcareCounty || "",
+      childcareWorkHours: data.childcareWorkHours || { head: 40, spouse: 40 },
+      includeHeadStart: data.includeHeadStart || false,
+      childcareActivityEligible: (data.regionCode || data.stateCode) === "NV" && Boolean(data.childcareActivityEligible),
     };
     const regionCode = data.regionCode || data.stateCode;
     const effectiveRegion = countryId === "us" && regionCode === "NYC" ? "NY" : regionCode;

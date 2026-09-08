@@ -20,6 +20,7 @@ export default function MetricCards({ results, showHealth, currencySymbol, count
   const netSeparate = unmarriedTotal(results, "aggregates", netKey);
   const delta = netMarried - netSeparate;
   const pctChange = netSeparate !== 0 ? delta / netSeparate : 0;
+  const afterChildcare = married.childcare?.enabled;
 
   const isBonus = delta > 0;
   const isPenalty = delta < 0;
@@ -67,13 +68,13 @@ export default function MetricCards({ results, showHealth, currencySymbol, count
       <div className="metric-card" data-testid="metric-net">
         <div className="metric-label">{unmarriedLabel}</div>
         <div className="metric-value">{formatCurrency(netSeparate, false, sym)}</div>
-        <div className="metric-desc">{results.unmarried ? "Household net income" : "Combined net income"}</div>
+        <div className="metric-desc">{results.unmarried ? "Household net income" : "Combined net income"}{afterChildcare ? " after childcare" : ""}</div>
       </div>
 
       <div className="metric-card" data-testid="metric-pct">
         <div className="metric-label">Married</div>
         <div className="metric-value">{formatCurrency(netMarried, false, sym)}</div>
-        <div className="metric-desc">Household net income</div>
+        <div className="metric-desc">Household net income{afterChildcare ? " after childcare" : ""}</div>
       </div>
 
       <div className={deltaClass} data-testid="metric-delta">

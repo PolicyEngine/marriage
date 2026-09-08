@@ -11,7 +11,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const API_URL = "https://api.policyengine.org/us/metadata";
+const API_URL = process.env.US_METADATA_URL;
 const OUT_PATH = path.join(__dirname, "..", "lib", "metadata.json");
 
 // Year used to resolve parameter-backed "adds" references
@@ -41,7 +41,9 @@ function resolveParameterValues(param, year) {
 function getDirectChildren(variableName, variables, parameters, year) {
   const variable = variables[variableName];
   if (!variable) return [];
-  const adds = variable.adds;
+  // Formula-based aggregates still publish the underlying list parameter.
+  const adds = variable.adds || (parameters[`gov.household.${variableName}`]
+    ? `gov.household.${variableName}` : null);
   if (!adds) return [];
   if (Array.isArray(adds)) return adds;
   if (typeof adds === "string") {
@@ -67,11 +69,20 @@ function varInfo(varName, variables) {
 // ---------- main ----------
 
 async function main() {
-  console.log("Fetching PolicyEngine US metadata...");
-  const res = await fetch(API_URL);
-  if (!res.ok) throw new Error(`API returned ${res.status}`);
-
-  const data = await res.json();
+  // Production builds use the reviewed, committed metadata matching our pinned
+  // runtime. An explicit source is required to update it; the public v1 API
+  // runs a different model and must not overwrite this catalog during a build.
+  if (!process.env.US_METADATA_FILE && !API_URL) {
+    console.log("Using committed US metadata for the pinned marriage runtime.");
+    return;
+  }
+  const data = process.env.US_METADATA_FILE
+    ? JSON.parse(fs.readFileSync(process.env.US_METADATA_FILE, "utf8"))
+    : await (async () => {
+      const res = await fetch(API_URL);
+      if (!res.ok) throw new Error(`API returned ${res.status}`);
+      return res.json();
+    })();
   const { variables, parameters } = data.result || data;
   console.log(`  ${Object.keys(variables).length} variables, ${Object.keys(parameters).length} parameters`);
 
@@ -97,8 +108,10 @@ async function main() {
   // Skip household_health_benefits from benefits (overlap with healthcare tab)
   const skipBenefits = new Set(["household_health_benefits"]);
 
-  const benefits = benefitChildren
+  const benefits = [...new Set(benefitChildren
     .filter(v => !skipBenefits.has(v))
+    .flatMap(v => v === "household_head_start_benefits" ? ["head_start", "early_head_start"] : [v])
+    .concat("child_care_subsidies"))]
     .map(v => varInfo(v, variables));
 
   const credits = creditChildren.map(v => varInfo(v, variables));
@@ -129,6 +142,7 @@ async function main() {
   }
 
   const metadata = {
+    modelVersion: (data.result || data).model_version || (data.result || data).version,
     benefits,
     credits,
     taxes,
@@ -188,6 +202,33 @@ async function main() {
   }
 
   fs.writeFileSync(OUT_PATH, JSON.stringify(metadata, null, 2) + "\n");
+  const childcarePath = path.join(__dirname, "..", "lib", "childcare-metadata.json");
+  const childcare = JSON.parse(fs.readFileSync(childcarePath, "utf8"));
+  const programs = getDirectChildren("child_care_subsidies", variables, parameters, YEAR);
+  const stateBenefits = getDirectChildren("household_state_benefits", variables, parameters, YEAR);
+  // Provider variable routing is curated; refresh its enums and every county
+  // from the same model. Fail rather than silently drop a state's input fields.
+  for (const [code, state] of Object.entries(childcare.states)) {
+    if (!programs.includes(state.program)) throw new Error(`Missing childcare program for ${code}`);
+    state.period = variables[state.program].definitionPeriod;
+    state.includedInStateBenefits = stateBenefits.includes(state.program);
+    for (const field of state.providers) {
+      const variable = variables[field.variable];
+      if (!variable?.possibleValues?.length) throw new Error(`Missing provider enum ${field.variable}`);
+      field.options = variable.possibleValues;
+      field.defaultValue = variable.defaultValue;
+      field.entity = variable.entity;
+      field.period = variable.definitionPeriod;
+    }
+  }
+  childcare.counties = {};
+  for (const county of variables.county.possibleValues) {
+    const code = county.value.slice(-2);
+    if (childcare.states[code]) (childcare.counties[code] ||= []).push(county);
+  }
+  childcare.modelVersion = metadata.modelVersion;
+  childcare.source = `https://pypi.org/project/policyengine-us/${metadata.modelVersion}/`;
+  fs.writeFileSync(childcarePath, JSON.stringify(childcare, null, 2) + "\n");
   console.log(`\nWrote ${OUT_PATH}`);
 }
 
