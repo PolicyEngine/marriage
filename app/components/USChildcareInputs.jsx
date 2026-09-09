@@ -78,7 +78,7 @@ export default function USChildcareInputs({
   regionCode, childEntries, updateChild, ccdfSlotAvailable, onCcdfSlotAvailableChange,
   childcareCounty, onCountyChange, childcareWorkHours, onWorkHoursChange,
   childcareActivityEligible, onActivityEligibleChange, error, hideChildcare = false,
-  progressive = false,
+  progressive = false, hideWork = false,
 }) {
   const state = stateCode(regionCode);
   const counties = childcareCounties(regionCode);
@@ -88,6 +88,7 @@ export default function USChildcareInputs({
   const providerLabel = (index) => state === "AR" ? "Care type" : `Provider type${providers.length > 1 ? ` ${index + 1}` : ""}`;
   return (
     <div className="sf-group sf-us-childcare">
+      {!hideWork && <>
       <div className="sf-group-title">{hideChildcare ? "Work" : "Work, childcare and early learning"}</div>
       <p className="sf-input-note">Weekly work hours default to 40 for each adult. Adjust these to match your work schedule. They stay fixed across the income grid and may affect other benefits as well as childcare assistance.</p>
       <div className="sf-row">
@@ -97,6 +98,7 @@ export default function USChildcareInputs({
           value={childcareWorkHours.spouse} onChange={(spouse) => onWorkHoursChange({ ...childcareWorkHours, spouse })} />
       </div>
 
+      </>}
       {showAssistance && <Toggle label="Assume a funded childcare slot" checked={ccdfSlotAvailable} onChange={onCcdfSlotAvailableChange} />}
       {showAssistance && <p className="sf-input-note">Assumes a funded place is available if you otherwise qualify for childcare assistance, rather than being on a waiting list. Without a funded slot, you still pay the childcare costs entered.</p>}
       {!hideChildcare && (childEntries.length > 0 || childcareCounty) && (

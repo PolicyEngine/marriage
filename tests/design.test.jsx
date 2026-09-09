@@ -141,59 +141,33 @@ describe("MetricCards", () => {
   });
 });
 
-// ---------- Country toggle & year select ----------
+// ---------- Focused form design ----------
 
-describe("Country toggle", () => {
-  const countries = {
-    us: { id: "us", name: "United States" },
-    uk: { id: "uk", name: "United Kingdom" },
-  };
-  const country = {
-    id: "us",
-    currencySymbol: "$",
-    defaultYear: "2026",
-    availableYears: ["2024", "2025", "2026"],
-    defaultAge: 40,
-    defaultRegion: "CA",
-    regions: [{ code: "CA", name: "California" }],
-    regionLabel: "State",
-    hasDisability: false,
-    hasPregnancy: false,
-    hasESI: false,
-  };
-
-  it("renders country toggle buttons", async () => {
+describe("Shared form controls", () => {
+  it("uses the shared country dropdown and commits only after saving", async () => {
     const { default: InputForm } = await import("../app/components/InputForm.jsx");
-    render(<InputForm country={country} countries={countries} countryId="us" onCountryChange={() => {}} onCalculate={() => {}} loading={false} />);
-
-    const toggle = document.querySelector(".country-toggle");
-    expect(toggle).toBeTruthy();
-    const buttons = toggle.querySelectorAll("button");
-    expect(buttons.length).toBe(2);
-    expect(buttons[0].textContent).toBe("United States");
-    expect(buttons[1].textContent).toBe("United Kingdom");
+    const onCountryChange = vi.fn();
+    const onCalculate = vi.fn();
+    render(<InputForm country={COUNTRIES.us} countries={COUNTRIES} countryId="us" section="comparison" onCountryChange={onCountryChange} onCalculate={onCalculate} />);
+    const country = screen.getByRole("combobox", { name: "Country" });
+    expect(country.getAttribute("data-slot")).toBe("select-trigger");
+    expect(country.textContent).toBe("United States");
+    fireEvent.keyDown(country, { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("option", { name: "United Kingdom" }));
+    expect(onCountryChange).toHaveBeenCalledWith("uk");
+    expect(onCalculate).not.toHaveBeenCalled();
   });
 
-  it("active country has active class", async () => {
-    const { default: InputForm } = await import("../app/components/InputForm.jsx");
-    render(<InputForm country={country} countries={countries} countryId="us" onCountryChange={() => {}} onCalculate={() => {}} loading={false} />);
-
-    const buttons = document.querySelectorAll(".country-toggle button");
-    expect(buttons[0].className).toContain("active");
-    expect(buttons[1].className).not.toContain("active");
-  });
-
-  it("uses the shared year dropdown and supports keyboard selection without submitting", async () => {
+  it("supports keyboard year selection without submitting", async () => {
     const { default: InputForm } = await import("../app/components/InputForm.jsx");
     const onCalculate = vi.fn();
-    render(<InputForm country={country} countries={countries} countryId="us" onCountryChange={() => {}} onCalculate={onCalculate} loading={false} />);
-
+    const country = { ...COUNTRIES.us, availableYears: ["2024", "2025", "2026"] };
+    render(<InputForm country={country} countryId="us" section="comparison" onCalculate={onCalculate} />);
     const yearSelect = screen.getByRole("combobox", { name: "Year" });
     expect(yearSelect.getAttribute("data-slot")).toBe("select-trigger");
     expect(yearSelect.textContent).toBe("2026");
     fireEvent.keyDown(yearSelect, { key: "ArrowDown" });
     const selectedOption = await screen.findByRole("option", { name: "2026" });
-    expect(screen.getAllByRole("option")).toHaveLength(3);
     await waitFor(() => expect(document.activeElement).toBe(selectedOption));
     fireEvent.keyDown(selectedOption, { key: "ArrowUp" });
     const previousYear = screen.getByRole("option", { name: "2025" });
@@ -201,49 +175,36 @@ describe("Country toggle", () => {
     fireEvent.keyDown(previousYear, { key: "Enter" });
     expect(yearSelect.textContent).toBe("2025");
     expect(onCalculate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(onCalculate.mock.calls[0][0].year).toBe("2025");
   });
 
-  it("uses shared dropdowns for UK region, fiscal year, tenure, and rental market area", async () => {
+  it("uses UK fiscal years and shared housing controls in their own section", async () => {
     const { default: InputForm } = await import("../app/components/InputForm.jsx");
     const onCalculate = vi.fn();
-    render(<InputForm country={COUNTRIES.uk} countryId="uk" onCalculate={onCalculate} loading={false} />);
-    fireEvent.click(screen.getByText("More details"));
-    for (const name of [COUNTRIES.uk.regionLabel, "Year", "Tenure"]) {
-      expect(screen.getByRole("combobox", { name }).getAttribute("data-slot")).toBe("select-trigger");
-    }
+    const { unmount } = render(<InputForm country={COUNTRIES.uk} countryId="uk" section="comparison" onCalculate={onCalculate} />);
+    for (const name of ["UK nation", "Year"]) expect(screen.getByRole("combobox", { name }).getAttribute("data-slot")).toBe("select-trigger");
     expect(screen.getByRole("combobox", { name: "Year" }).textContent).toBe("2026-27");
+    unmount();
+    render(<InputForm country={COUNTRIES.uk} countryId="uk" section="housing" onCalculate={onCalculate} />);
+    expect(screen.getByRole("combobox", { name: "Tenure" }).getAttribute("data-slot")).toBe("select-trigger");
     fireEvent.keyDown(screen.getByRole("combobox", { name: "Tenure" }), { key: "ArrowDown" });
     fireEvent.click(await screen.findByRole("option", { name: "Rented privately" }));
     const area = screen.getByRole("combobox", { name: "Rental market area" });
     expect(area.getAttribute("data-slot")).toBe("select-trigger");
     fireEvent.keyDown(area, { key: "ArrowDown" });
     fireEvent.click(await screen.findByRole("option", { name: UK_BRMAS[0].name }));
-    fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
-    expect(onCalculate.mock.calls[0][0]).toMatchObject({
-      tenureType: "RENT_PRIVATELY", brma: UK_BRMAS[0].code, year: "2026",
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(onCalculate.mock.calls[0][0]).toMatchObject({ tenureType: "RENT_PRIVATELY", brma: UK_BRMAS[0].code, year: "2026" });
   });
 
-  it("renders a collapsed assumptions summary", async () => {
+  it("offers full assumptions at the final setup question", async () => {
     const { default: InputForm } = await import("../app/components/InputForm.jsx");
-    const assumptionCountry = {
-      ...country,
-      hasDisability: true,
-      hasPregnancy: true,
-      hasESI: true,
-    };
-    render(<InputForm country={assumptionCountry} countries={countries} countryId="us" onCountryChange={() => {}} onCalculate={() => {}} loading={false} />);
-
+    render(<InputForm country={COUNTRIES.us} countryId="us" onCalculate={() => {}} />);
+    for (let i = 0; i < 3; i++) fireEvent.click(screen.getByRole("button", { name: "Continue", exact: true }));
     const details = document.querySelector(".sf-assumptions");
-    expect(details).toBeTruthy();
     expect(details.open).toBe(false);
-
-    const summary = within(details).getByText("Assumptions");
-    expect(summary).toBeTruthy();
-    fireEvent.click(summary);
-
+    fireEvent.click(within(details).getByText("Assumptions"));
     const note = within(details).getByRole("note", { name: "Model assumptions" });
     expect(within(note).getByText(/wages and salaries only/i)).toBeTruthy();
     expect(within(note).getByText(/all children are assigned to you/i)).toBeTruthy();

@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import InputForm from "./components/InputForm";
+import HouseholdSummary from "./components/HouseholdSummary";
 import ResultsDisplay from "./components/ResultsDisplay";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@policyengine/ui-kit/primitives";
 import { getCategorizedPrograms, getHeatmapData } from "@/lib/api";
-import { formatCurrency } from "@/lib/utils";
 import { getCountry, COUNTRIES, DEFAULT_COUNTRY, LEGACY_HASH_COUNTRY, DEFAULT_BRMA } from "@/lib/countries";
 
 const BASE_PATH =
@@ -186,12 +187,11 @@ export default function MarriageApp({ initialCountry = null }) {
   const [formData, setFormData] = useState(null);
   const [valentine, setValentine] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [externalIncomes, setExternalIncomes] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [guidedSetup, setGuidedSetup] = useState(true);
+  const [editingSection, setEditingSection] = useState(null);
+  const [editingCountryId, setEditingCountryId] = useState(countryId);
   const resultsPanel = useRef(null);
-  const focusEditor = useRef(false);
-  const inputPanel = useRef(null);
+  const editTrigger = useRef(null);
+  const savedEdit = useRef(false);
   const didAutoCalc = useRef(false);
   const calculationId = useRef(0);
   const activeRequest = useRef(null);
@@ -208,20 +208,15 @@ export default function MarriageApp({ initialCountry = null }) {
     const resolvedCountry = decoded.current?.countryId || hashCountry || initialCountry || DEFAULT_COUNTRY;
     setCountryId(resolvedCountry);
     setIsEmbedded(window.self !== window.top);
-    setGuidedSetup(!decoded.current);
     setMounted(true);
   }, [initialCountry]);
 
   useEffect(() => {
-    if (loading) resultsPanel.current?.focus();
-  }, [loading]);
-
-  useEffect(() => {
-    if (!guidedSetup && focusEditor.current) {
-      inputPanel.current?.querySelector("button, input")?.focus();
-      focusEditor.current = false;
+    if (loading) {
+      resultsPanel.current?.focus({ preventScroll: true });
+      resultsPanel.current?.closest(".results-workspace")?.scrollIntoView?.({ block: "start" });
     }
-  }, [guidedSetup]);
+  }, [loading]);
 
   // Fire the tool_engaged conversion event after the user has been on
   // the page long enough to count as genuinely engaged. Matches the
@@ -296,11 +291,10 @@ export default function MarriageApp({ initialCountry = null }) {
     setHeatmapLoading(false);
     setError(null);
     setHeatmapError(null);
-    setExternalIncomes(null);
   }
 
-  function updateHash(data) {
-    const hash = `#${encodeToHash(countryId, data, isEmbedded)}`;
+  function updateHash(data, nextCountryId = countryId) {
+    const hash = `#${encodeToHash(nextCountryId, data, isEmbedded)}`;
     window.history.replaceState(null, "", hash);
     if (window.self !== window.top) {
       window.parent.postMessage({ type: "hashchange", hash }, "*");
@@ -368,15 +362,15 @@ export default function MarriageApp({ initialCountry = null }) {
     }
   }
 
-  async function handleCalculate(data) {
-    setGuidedSetup(false);
+  async function handleCalculate(data, nextCountryId = countryId) {
     // Retry the submitted values, never a partially edited form or mutable
     // object retained by the caller. Country changes clear this snapshot.
-    const snapshot = { countryId, data: structuredClone(data) };
+    const snapshot = { countryId: nextCountryId, data: structuredClone(data) };
     retrySnapshot.current = snapshot;
     const { requestId, controller } = startRequest();
+    setCountryId(nextCountryId);
     setFormData(snapshot.data);
-    updateHash(snapshot.data);
+    updateHash(snapshot.data, nextCountryId);
 
     setLoading(true);
     setError(null);
@@ -402,7 +396,7 @@ export default function MarriageApp({ initialCountry = null }) {
   }
 
   function retryCalculation() {
-    if (retrySnapshot.current) handleCalculate(retrySnapshot.current.data);
+    if (retrySnapshot.current) handleCalculate(retrySnapshot.current.data, retrySnapshot.current.countryId);
   }
 
   function retryHeatmap() {
@@ -412,10 +406,22 @@ export default function MarriageApp({ initialCountry = null }) {
   }
 
   function handleCellClick(headIncome, spouseIncome) {
-    setExternalIncomes({ headIncome, spouseIncome });
     const data = { ...formData, headIncome, spouseIncome };
     setFormData(data);
     updateHash(data);
+  }
+
+  function openEdit(section, event) {
+    editTrigger.current = event.currentTarget;
+    savedEdit.current = false;
+    setEditingCountryId(countryId);
+    setEditingSection(section);
+  }
+
+  function saveEdit(data) {
+    savedEdit.current = true;
+    setEditingSection(null);
+    handleCalculate(data, editingCountryId);
   }
 
   // Auto-calculate if URL has params on first load
@@ -423,7 +429,7 @@ export default function MarriageApp({ initialCountry = null }) {
     if (!mounted) return;
     if (decoded.current && !didAutoCalc.current) {
       didAutoCalc.current = true;
-      handleCalculate(decoded.current);
+      handleCalculate(decoded.current, decoded.current.countryId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
@@ -451,109 +457,74 @@ export default function MarriageApp({ initialCountry = null }) {
             <p>
               {valentine
                 ? "Will tying the knot cost you? Find out this Valentine\u2019s Day."
-                : <>See how marriage would change your taxes and benefits. <span className="vday-hint">&hearts; Press V</span></>}
+                : countryId === "uk" ? "See how living together would change your taxes and benefits." : "See how marriage would change your taxes and benefits."}
             </p>
           </div>
         </header>
 
-        <div className={`app-layout${guidedSetup ? " app-layout--wizard" : ""}`}>
-          <aside
-            className={`app-sidebar ${results ? "has-results" : ""} ${sidebarOpen ? "sidebar-open" : ""}`}
-            role={guidedSetup ? "region" : undefined}
-            aria-label={guidedSetup ? "Set up your comparison" : "Your inputs"}
-          >
-            {results && !guidedSetup && (
-              <button
-                type="button"
-                className="sidebar-toggle"
-                onClick={() => setSidebarOpen((v) => !v)}
-                aria-expanded={sidebarOpen}
-                aria-controls="comparison-inputs"
-              >
-                <span className="sidebar-toggle-summary">
-                  {formData?.regionCode || formData?.stateCode} &middot; {formatCurrency(formData?.headIncome ?? 0, false, country.currencySymbol)} &amp; {formatCurrency(formData?.spouseIncome ?? 0, false, country.currencySymbol)}
-                </span>
-                <span className="sidebar-toggle-arrow">{sidebarOpen ? "\u25B2" : "\u25BC"}</span>
-              </button>
-            )}
-            <div className="sidebar-collapsible" id="comparison-inputs">
-              {!guidedSetup && (
-                <div className="editor-heading">
-                  <h2>Your inputs</h2>
-                  <button type="button" onClick={() => { setGuidedSetup(true); setSidebarOpen(true); }}>
-                    Guided setup
-                  </button>
-                </div>
-              )}
-              <div className="input-form-container" ref={inputPanel}>
-                <InputForm
-                  key={mounted ? "ready" : "initial"}
-                  mode={guidedSetup ? "wizard" : "editor"}
-                  onExitWizard={() => { focusEditor.current = true; setGuidedSetup(false); }}
-                  country={country}
-                  countries={isEmbedded ? null : COUNTRIES}
-                  countryId={countryId}
-                  onCountryChange={handleCountryChange}
-                  onCalculate={(data) => { setSidebarOpen(false); handleCalculate(data); }}
-                  onInputChange={clearResults}
-                  loading={loading}
-                  initialValues={decoded.current}
-                  externalIncomes={externalIncomes}
-                />
-              </div>
-            </div>
-          </aside>
-
-          <section className="app-main" hidden={guidedSetup} ref={resultsPanel} tabIndex={-1} aria-label="Comparison results">
-            {error && <div className="error" role="alert">
-              <p>{error}</p>
-              <button type="button" className="mt-3 rounded-md bg-primary px-4 py-2 font-medium text-white"
-                onClick={retryCalculation}>Retry calculation</button>
-            </div>}
-
-            {loading && (
-              <div className="main-placeholder" role="status">
-                <span className="spinner" /> Calculating...
-              </div>
-            )}
-
-            {!results && !loading && !error && (
-              <div className="main-placeholder main-placeholder--intro">
-                <div className="intro-card">
-                  <h2>Calculate your comparison</h2>
-                  <p>
-                    Review your inputs and select Calculate to compare financial
-                    resources, taxes, benefits, and service values.
-                  </p>
-                  <ul className="intro-highlights">
-                    <li>A breakdown by program</li>
-                    <li>Healthcare and early education shown separately</li>
-                    <li>An income grid to explore other earnings</li>
-                  </ul>
-                  <p className="intro-cta">Press <strong>Calculate</strong> to begin.</p>
-                </div>
-              </div>
-            )}
-
-            {results && (
-              <ResultsDisplay
+        {!mounted ? <div className="journey-loading" role="status">Loading your comparison...</div> : !formData ? (
+          <section className="setup-workspace" aria-label="Set up your comparison">
+            <InputForm
+              country={country}
+              countries={isEmbedded ? null : COUNTRIES}
+              countryId={countryId}
+              onCountryChange={handleCountryChange}
+              onCalculate={handleCalculate}
+              loading={loading}
+              initialValues={decoded.current}
+            />
+          </section>
+        ) : (
+          <div className="results-workspace">
+            <HouseholdSummary country={country} data={formData} onEdit={openEdit} />
+            <section className="results-workspace-content" ref={resultsPanel} tabIndex={-1} aria-label="Comparison results">
+              {error && <div className="error" role="alert">
+                <p>{error}</p>
+                <button type="button" className="mt-3 rounded-md bg-primary px-4 py-2 font-medium text-white"
+                  onClick={retryCalculation}>Retry calculation</button>
+              </div>}
+              {loading && <div className="journey-loading" role="status"><span className="spinner" /> Calculating...</div>}
+              {results && <ResultsDisplay
                 results={results}
                 heatmapData={heatmapData}
                 heatmapLoading={heatmapLoading}
                 heatmapError={heatmapError}
                 onRetryHeatmap={retryHeatmap}
-                headIncome={formData?.headIncome ?? 0}
-                spouseIncome={formData?.spouseIncome ?? 0}
+                headIncome={formData.headIncome ?? 0}
+                spouseIncome={formData.spouseIncome ?? 0}
                 valentine={valentine}
                 onCellClick={handleCellClick}
-                esiStatus={formData?.esiStatus}
+                esiStatus={formData.esiStatus}
                 country={country}
-                livingArrangement={formData?.livingArrangement}
-                hasChildren={Boolean(formData?.children?.length)}
-              />
-            )}
-          </section>
-        </div>
+                livingArrangement={formData.livingArrangement}
+                hasChildren={Boolean(formData.children?.length)}
+              />}
+            </section>
+          </div>
+        )}
+
+        <Dialog open={Boolean(editingSection)} onOpenChange={(open) => { if (!open) setEditingSection(null); }}>
+          <DialogContent className="household-edit-dialog" onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (savedEdit.current) resultsPanel.current?.focus({ preventScroll: true });
+            else editTrigger.current?.focus();
+          }}>
+            <DialogTitle className="household-edit-title">Edit your household</DialogTitle>
+            <DialogDescription className="household-edit-description">Save to update your comparison, or cancel to keep your current result.</DialogDescription>
+            {editingSection && <InputForm
+              key={editingSection}
+              section={editingSection}
+              country={getCountry(editingCountryId)}
+              countries={isEmbedded ? null : COUNTRIES}
+              countryId={editingCountryId}
+              onCountryChange={setEditingCountryId}
+              initialValues={formData}
+              onCalculate={saveEdit}
+              onCancel={() => setEditingSection(null)}
+              loading={false}
+            />}
+          </DialogContent>
+        </Dialog>
 
         <footer className="app-footer">
           <span>

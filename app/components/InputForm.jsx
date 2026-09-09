@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
 import { isRentedTenure } from "@/lib/api";
+import { getInputSections, getInputSection } from "@/lib/inputSections";
 import { formatYearLabel } from "@/lib/utils";
 import { UK_BRMAS, DEFAULT_BRMA } from "@/lib/countries";
 import FormSelect from "./FormSelect";
@@ -18,10 +19,6 @@ function parseNumber(str) {
   return Number.isNaN(n) ? 0 : n;
 }
 
-function clamp(val, min, max) {
-  return Math.max(min, Math.min(max, val));
-}
-
 function capitaliseFirst(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
@@ -34,13 +31,14 @@ function joinWithAnd(items) {
 
 const DEFAULT_INCOME = 45000;
 
-export default function InputForm({ country, countries, countryId, onCountryChange, onCalculate, onInputChange, loading, initialValues, externalIncomes, mode = "editor", onExitWizard }) {
-  const isWizard = mode === "wizard";
-  const [wizardStep, setWizardStep] = useState(0);
+export default function InputForm({ country, countries, countryId, onCountryChange, onCalculate, loading, initialValues, section = null, onCancel }) {
+  const [activeSection, setActiveSection] = useState(section || "comparison");
+  const [furthestStep, setFurthestStep] = useState(0);
+  const [followup, setFollowup] = useState(null);
+  const [initialCountry] = useState(country.id);
   const formRef = useRef(null);
   const stepHeadingRef = useRef(null);
-  const previousStep = useRef(wizardStep);
-  const previousWizard = useRef(isWizard);
+  const previousSection = useRef(activeSection);
   const iv = initialValues || {};
   const [regionCode, setRegionCode] = useState(iv.regionCode || iv.stateCode || country.defaultRegion);
   const [headIncome, setHeadIncome] = useState(
@@ -56,8 +54,8 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   const [childcareWorkHours, setChildcareWorkHours] = useState(iv.childcareWorkHours || { head: 40, spouse: 40 });
   const [includeHeadStart, setIncludeHeadStart] = useState(iv.includeHeadStart || false);
   const [childcareActivityEligible, setChildcareActivityEligible] = useState(iv.childcareActivityEligible || false);
-  const [headAge, setHeadAge] = useState(iv.headAge ? String(iv.headAge) : String(country.defaultAge));
-  const [spouseAge, setSpouseAge] = useState(iv.spouseAge ? String(iv.spouseAge) : String(country.defaultAge));
+  const [headAge, setHeadAge] = useState(iv.headAge != null ? String(iv.headAge) : String(country.defaultAge));
+  const [spouseAge, setSpouseAge] = useState(iv.spouseAge != null ? String(iv.spouseAge) : String(country.defaultAge));
   const [headPregnant, setHeadPregnant] = useState(iv.pregnancyStatus?.head || false);
   const [spousePregnant, setSpousePregnant] = useState(iv.pregnancyStatus?.spouse || false);
   const [headESI, setHeadESI] = useState(iv.esiStatus?.head || false);
@@ -92,26 +90,18 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   );
   const [errors, setErrors] = useState({});
   useEffect(() => {
-    if (isWizard && (!previousWizard.current || previousStep.current !== wizardStep)) {
-      stepHeadingRef.current?.focus({ preventScroll: true });
+    stepHeadingRef.current?.focus({ preventScroll: true });
+    if (!section && previousSection.current !== activeSection) {
       formRef.current?.scrollIntoView?.({ block: "start" });
     }
-    previousStep.current = wizardStep;
-    previousWizard.current = isWizard;
-  }, [isWizard, wizardStep]);
+    previousSection.current = activeSection;
+  }, [activeSection, section]);
 
   useEffect(() => {
     if (!errors.form && !errors.childcare) return;
     const alert = formRef.current?.querySelector('[role="alert"]');
-    if (alert) {
-      alert.tabIndex = -1;
-      alert.focus();
-    }
-  }, [errors, wizardStep]);
-  const previousInputs = useRef(null);
-  const syncedIncomes = useRef(null);
-  const childrenKey = JSON.stringify(children);
-  const childcareWorkHoursKey = JSON.stringify(childcareWorkHours);
+    if (alert) { alert.tabIndex = -1; alert.focus(); }
+  }, [errors, activeSection]);
   const hasPaidChildcare = country.id === "us" && children.some((child) => Number(child.childcareCost) > 0);
   const nondefaultWorkHours = country.id === "us" && (Number(childcareWorkHours.head) !== 40 || Number(childcareWorkHours.spouse) !== 40);
   const adultInputs = ["age"];
@@ -121,29 +111,6 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   // Owners get no Universal Credit housing element, so the rent field does
   // not apply and must not be deducted from net income either.
   const rentsApply = isRentedTenure(tenureType);
-
-  // Everything under "More details" is optional and country-gated. The badge
-  // counts how many are actually set, so a collapsed panel never hides an
-  // input that is changing the result.
-  const extrasInUse = [
-    rentsApply && parseNumber(rent) > 0,
-    parseNumber(childcareCosts) > 0,
-    parseNumber(savings) > 0,
-    parseNumber(headSelfEmp) > 0,
-    parseNumber(spouseSelfEmp) > 0,
-    parseNumber(headPension) > 0,
-    parseNumber(spousePension) > 0,
-    headCarer,
-    spouseCarer,
-    headDisabled,
-    spouseDisabled,
-    country.id === "us" && !ccdfSlotAvailable,
-    hasPaidChildcare,
-    country.id === "us" && Boolean(childcareCounty),
-    nondefaultWorkHours,
-    country.id === "us" && includeHeadStart,
-    children.length > 0,
-  ].filter(Boolean).length;
 
   const householdInputs = [];
   if (country.hasHousing) householdInputs.push("rent and tenure type");
@@ -220,8 +187,11 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       setIncludeHeadStart(false);
       setChildcareActivityEligible(false);
       setChildren((current) => current.map((child) => ({ age: child.age, isDisabled: child.isDisabled })));
-      setHeadAge(String(country.defaultAge));
-      setSpouseAge(String(country.defaultAge));
+      // Country defaults apply only before household answers have been entered.
+      if (!section && furthestStep === 0) {
+        if (initialValues?.headAge == null) setHeadAge(String(country.defaultAge));
+        if (initialValues?.spouseAge == null) setSpouseAge(String(country.defaultAge));
+      }
       if (!country.hasDisability) {
         setHeadDisabled(false);
         setSpouseDisabled(false);
@@ -254,7 +224,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         setSpouseESI(false);
       }
     }
-  }, [country]);
+  }, [country, section, furthestStep, initialValues]);
 
   // County and state-specific provider choices cannot survive a state change.
   const previousRegion = useRef(regionCode);
@@ -265,31 +235,6 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     setChildcareActivityEligible(false);
     setChildren((current) => current.map((child) => ({ ...child, childcareProviders: {} })));
   }, [regionCode]);
-
-  // Clear stale results when inputs change (but not on initial mount)
-  useEffect(() => {
-    const inputs = [regionCode, headIncome, spouseIncome, headAge, spouseAge,
-      headDisabled, spouseDisabled, headPregnant, spousePregnant, headESI, spouseESI, year, childrenKey, livingArrangement,
-      ccdfSlotAvailable, childcareCounty, childcareWorkHoursKey, includeHeadStart, childcareActivityEligible,
-      rent, tenureType, brma, childcareCosts, savings,
-      headCarer, spouseCarer, headSelfEmp, spouseSelfEmp, headPension, spousePension];
-    const previous = previousInputs.current;
-    previousInputs.current = inputs;
-    // Strict Mode repeats mount effects. Only an actual value change should
-    // cancel a pending calculation, including one restored from a shared link.
-    if (!previous || inputs.every((value, i) => value === previous[i])) return;
-    if (syncedIncomes.current) {
-      const synced = syncedIncomes.current;
-      syncedIncomes.current = null;
-      if (headIncome === synced.headIncome && spouseIncome === synced.spouseIncome) return;
-    }
-    if (onInputChange) onInputChange();
-  }, [regionCode, headIncome, spouseIncome, headAge, spouseAge,
-    headDisabled, spouseDisabled, headPregnant, spousePregnant, headESI, spouseESI, year, childrenKey, livingArrangement,
-    ccdfSlotAvailable, childcareCounty, childcareWorkHoursKey, includeHeadStart, childcareActivityEligible,
-    rent, tenureType, brma, childcareCosts, savings,
-    headCarer, spouseCarer, headSelfEmp, spouseSelfEmp,
-    headPension, spousePension, onInputChange]);
 
   function buildFormData() {
     return {
@@ -325,21 +270,6 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     };
   }
 
-  // Sync income fields when heatmap cell is clicked
-  useEffect(() => {
-    if (externalIncomes) {
-      const nextHead = formatIncome(externalIncomes.headIncome);
-      const nextSpouse = formatIncome(externalIncomes.spouseIncome);
-      if (nextHead !== headIncome || nextSpouse !== spouseIncome) {
-        syncedIncomes.current = { headIncome: nextHead, spouseIncome: nextSpouse };
-        setHeadIncome(nextHead);
-        setSpouseIncome(nextSpouse);
-      }
-    }
-    // Only external selections trigger a sync; user edits must remain editable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [externalIncomes]);
-
   function setError(field, msg) {
     setErrors((prev) => ({ ...prev, [field]: msg }));
     setTimeout(() => setErrors((prev) => { const n = { ...prev }; delete n[field]; return n; }), 3000);
@@ -356,96 +286,90 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     if (num < 0) setError(field, "Set to 0");
   }
 
-  function handleAgeBlur(setter, value, field) {
-    if (isWizard) return;
-    let num = Number(value);
-    if (Number.isNaN(num) || value === "") num = country.defaultAge;
-    const clamped = clamp(Math.round(num), 18, 100);
-    setter(String(clamped));
-    if (num < 18 || num > 100) setError(field, "18\u2013100");
-  }
-
-  function handleChildAgeBlur(index, value) {
-    if (isWizard) return;
-    let num = Number(value);
-    if (Number.isNaN(num) || value === "") num = 0;
-    const clamped = clamp(Math.round(num), 0, 18);
-    const updated = [...children];
-    updated[index] = { ...updated[index], age: String(clamped) };
-    setChildren(updated);
-    if (num < 0 || num > 18) setError(`childAge${index}`, "0\u201318");
-  }
-
   function updateChild(index, field, value) {
     const updated = [...children];
     updated[index] = { ...updated[index], [field]: value };
     setChildren(updated);
   }
 
+  const data = buildFormData();
+  const sections = getInputSections(country, data);
+  const stepIndex = Math.max(0, sections.findIndex((item) => item.id === activeSection));
+  const current = getInputSection(activeSection);
+  const lastStep = stepIndex === sections.length - 1;
+  const initialChildren = initialValues?.children || [];
+  const childrenChanged = children.length !== initialChildren.length || children.some((child, index) => String(child.age) !== String(initialChildren[index]?.age));
+  const comparisonChanged = country.id !== initialCountry || regionCode !== (initialValues?.regionCode || initialValues?.stateCode || country.defaultRegion);
+  const needsCareFollowup = Boolean(section && activeSection !== "childcare" && !followup && sections.some((item) => item.id === "childcare") && (
+    (section === "comparison" && comparisonChanged) || (section === "household" && childrenChanged)
+  ));
+
+  function showError(target, message, fields = {}) {
+    if (section && activeSection !== target) setFollowup(section);
+    setActiveSection(target);
+    setErrors({ ...fields, form: message });
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
     if (loading) return;
-    if (isWizard && wizardStep > 0) {
+    // Progress navigation can revisit answers without submitting their topic.
+    // Check the raw draft again before committing; normalization supplies fallbacks.
+    const committing = Boolean(section) || lastStep;
+    if (activeSection === "household" || committing) {
       const ageErrors = {};
       for (const [field, value] of [["headAge", headAge], ["spouseAge", spouseAge]]) {
-        if (value === "" || !Number.isInteger(Number(value)) || Number(value) < 18 || Number(value) > 100) {
-          ageErrors[field] = "Enter a whole-number age from 18 to 100.";
-        }
+        if (value === "" || !Number.isInteger(Number(value)) || Number(value) < 18 || Number(value) > 100) ageErrors[field] = "Enter a whole-number age from 18 to 100.";
       }
       children.forEach((child, index) => {
-        if (child.age === "" || !Number.isInteger(Number(child.age)) || Number(child.age) < 0 || Number(child.age) > 18) {
-          ageErrors[`childAge${index}`] = "Enter a whole-number age from 0 to 18.";
-        }
+        if (child.age === "" || !Number.isInteger(Number(child.age)) || Number(child.age) < 0 || Number(child.age) > 18) ageErrors[`childAge${index}`] = "Enter a whole-number age from 0 to 18.";
       });
-      if (Object.keys(ageErrors).length > 0) {
-        setErrors({ ...ageErrors, form: "Check the ages below: adults must be 18–100 and children 0–18, in whole years." });
-        setWizardStep(1);
+      if (Object.keys(ageErrors).length) {
+        showError("household", "Check the ages below: adults must be 18–100 and children 0–18, in whole years.", ageErrors);
         return;
       }
     }
-    if (isWizard && !e.currentTarget.reportValidity()) return;
-    if (isWizard && wizardStep < 2) {
-      setErrors({});
-      setWizardStep(wizardStep + 1);
+    if (country.id === "us" && (activeSection === "work" || committing) && [childcareWorkHours.head, childcareWorkHours.spouse].some((value) => value === "" || value == null || !Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 168)) {
+      showError("work", "Enter weekly work hours between 0 and 168 for each adult.");
       return;
     }
-    const data = buildFormData();
-    const childcareError = country.id === "us" ? childCareFormError(data) : null;
-    if (childcareError) {
-      setErrors((current) => ({ ...current, childcare: childcareError }));
-      const details = e.currentTarget.querySelector(".sf-more");
-      if (details) details.open = true;
-      return;
+    if (!e.currentTarget.reportValidity()) return;
+    if (country.id === "us" && (activeSection === "childcare" || lastStep || section)) {
+      const error = childCareFormError(data);
+      if (error) {
+        const target = error.includes("weekly work hours") ? "work" : "childcare";
+        showError(target, error);
+        return;
+      }
     }
     setErrors({});
-    onCalculate(data);
+    if (needsCareFollowup) {
+      setFollowup(activeSection);
+      setActiveSection("childcare");
+    } else if (!section && !lastStep) {
+      setActiveSection(sections[stepIndex + 1].id);
+      setFurthestStep(Math.max(furthestStep, stepIndex + 1));
+    } else {
+      onCalculate(data);
+    }
   }
 
+  const regionLabel = country.id === "uk" ? "UK nation" : country.regionLabel;
   const comparisonFields = (
     <>
-      {countries && (
+      {countries && onCountryChange && (
         <div className="sf-field">
-          <div className="country-toggle">
-            {Object.values(countries).map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className={`country-toggle-btn${countryId === c.id ? " active" : ""}`}
-                aria-pressed={countryId === c.id}
-                onClick={() => onCountryChange(c.id)}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
+          <label htmlFor="country">Country</label>
+          <FormSelect id="country" label="Country" value={countryId} onValueChange={onCountryChange}
+            options={Object.values(countries).map((item) => ({ value: item.id, label: item.name }))} />
         </div>
       )}
       <div className="sf-row">
         <div className="sf-field sf-grow">
-          <label htmlFor="region">{country.regionLabel}</label>
+          <label htmlFor="region">{regionLabel}</label>
           <FormSelect
             id="region"
-            label={country.regionLabel}
+            label={regionLabel}
             value={regionCode}
             onValueChange={setRegionCode}
             options={country.regions.map((region) => ({ value: region.code, label: region.name }))}
@@ -463,31 +387,24 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         </div>
       </div>
 
-      {country.id === "us" && (
-        <div className="sf-field">
-          <label htmlFor="living-arrangement">Unmarried living arrangement</label>
-          <FormSelect
-            id="living-arrangement"
-            label="Unmarried living arrangement"
-            value={livingArrangement}
-            onValueChange={setLivingArrangement}
-            options={[
-              { value: "cohabiting", label: "Living together" },
-              { value: "separate", label: "Living separately" },
-            ]}
-          />
-        </div>
-      )}
+      {country.id === "us" ? (
+        <fieldset className="journey-comparison">
+          <legend>Before marriage, would you live together?</legend>
+          {[
+            { value: "cohabiting", label: "Living together", description: "Same home, food and resources. Isolates the effect of marriage within a shared household." },
+            { value: "separate", label: "Living separately", description: "Separate homes. Includes marriage and combining households; savings on housing costs are not included." },
+          ].map((option) => (
+            <label className={`journey-choice${livingArrangement === option.value ? " is-selected" : ""}`} key={option.value}>
+              <input type="radio" name="living-arrangement" value={option.value} checked={livingArrangement === option.value} onChange={() => setLivingArrangement(option.value)} />
+              <span><strong>{option.label}</strong><span>{option.description}</span></span>
+            </label>
+          ))}
+          <p className="journey-note">{livingArrangement === "cohabiting"
+            ? "SNAP and other household benefits use a shared household in both scenarios."
+            : "The unmarried comparison treats each adult as a separate household."}</p>
+        </fieldset>
+      ) : <p className="journey-note">Compare living together as a couple with living in separate households. UK benefits generally assess couples who live together, whether or not they are married.</p>}
 
-      {isWizard && (
-        <p className="wizard-comparison-note">
-          {country.id === "uk"
-            ? "Compare living together as a couple with living in separate households. UK benefits generally assess couples who live together, whether or not they are married."
-            : livingArrangement === "cohabiting"
-              ? "Compare being married with being unmarried while sharing a home, food and resources. Household benefits such as SNAP use a shared household in both scenarios."
-              : "Compare being married and living together with being unmarried in separate homes. This includes the effect of combining households. Savings from sharing housing costs are not included."}
-        </p>
-      )}
     </>
   );
 
@@ -502,17 +419,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         incomeError={errors.headIncome}
         age={headAge}
         onAgeChange={setHeadAge}
-        onAgeBlur={() => handleAgeBlur(setHeadAge, headAge, "headAge")}
         ageError={errors.headAge}
-        disabled={headDisabled}
-        onDisabledChange={setHeadDisabled}
-        pregnant={headPregnant}
-        onPregnantChange={setHeadPregnant}
-        hasESI={headESI}
-        onESIChange={setHeadESI}
-        showDisability={false}
-        showPregnancy={false}
-        showESI={false}
         currencySymbol={country.currencySymbol}
       />
 
@@ -525,11 +432,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         incomeError={errors.spouseIncome}
         age={spouseAge}
         onAgeChange={setSpouseAge}
-        onAgeBlur={() => handleAgeBlur(setSpouseAge, spouseAge, "spouseAge")}
         ageError={errors.spouseAge}
-        showDisability={false}
-        showPregnancy={false}
-        showESI={false}
         currencySymbol={country.currencySymbol}
       />
     </>
@@ -562,7 +465,6 @@ export default function InputForm({ country, countries, countryId, onCountryChan
                 value={child.age}
                 className={errors[`childAge${i}`] ? "input-error" : ""}
                 onChange={(e) => updateChild(i, "age", e.target.value)}
-                onBlur={() => handleChildAgeBlur(i, child.age)}
               />
               <span className="sf-child-age-suffix">yr</span>
             </div>
@@ -586,8 +488,8 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         ))}
       </div>
 
-      {isWizard && (
-        <p className="wizard-default-note">
+      {(
+        <p className="journey-note">
           {children.length === 0
             ? "No children included. Add each child whose taxes and benefits you want to include."
             : country.id === "us"
@@ -598,9 +500,8 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     </>
   );
 
-  const detailsFields = (
-    <>
-      <div className={isWizard ? "wizard-adult-details" : "sf-more-people"}>
+  const extraAdultFields = (showMoney) => (
+      <div className="journey-people">
         <ExtraAdultFields
           title="You"
           accent="you"
@@ -619,13 +520,13 @@ export default function InputForm({ country, countries, countryId, onCountryChan
           onPregnantChange={setHeadPregnant}
           hasESI={headESI}
           onESIChange={setHeadESI}
-          showSelfEmployment={country.hasSelfEmployment}
-          showPension={country.hasPensionIncome}
-          showCarer={country.hasCarer}
+          showSelfEmployment={showMoney && country.hasSelfEmployment}
+          showPension={showMoney && country.hasPensionIncome}
+          showCarer={!showMoney && country.hasCarer}
           usesSSIDisability={country.id === "us"}
-          showDisability={country.hasDisability}
-          showPregnancy={country.hasPregnancy}
-          showESI={country.hasESI}
+          showDisability={!showMoney && country.hasDisability}
+          showPregnancy={!showMoney && country.hasPregnancy}
+          showESI={!showMoney && country.hasESI}
         />
 
         <ExtraAdultFields
@@ -646,34 +547,31 @@ export default function InputForm({ country, countries, countryId, onCountryChan
           onPregnantChange={setSpousePregnant}
           hasESI={spouseESI}
           onESIChange={setSpouseESI}
-          showSelfEmployment={country.hasSelfEmployment}
-          showPension={country.hasPensionIncome}
-          showCarer={country.hasCarer}
+          showSelfEmployment={showMoney && country.hasSelfEmployment}
+          showPension={showMoney && country.hasPensionIncome}
+          showCarer={!showMoney && country.hasCarer}
           usesSSIDisability={country.id === "us"}
-          showDisability={country.hasDisability}
-          showPregnancy={country.hasPregnancy}
-          showESI={country.hasESI}
+          showDisability={!showMoney && country.hasDisability}
+          showPregnancy={!showMoney && country.hasPregnancy}
+          showESI={!showMoney && country.hasESI}
         />
 
       </div>
-      {isWizard && country.hasESI && (
-        <p className="wizard-default-note">Has ESI means employer-sponsored health insurance. Leave it off for an adult without that coverage. Healthcare values appear separately from financial resources.</p>
-      )}
-      {!isWizard && childrenFields}
-      {country.id === "us" && (
-        <USChildcareInputs
-          regionCode={regionCode} childEntries={children} updateChild={updateChild}
-          hideChildcare={isWizard && children.length === 0 && !childcareCounty}
-          progressive={isWizard}
-          ccdfSlotAvailable={ccdfSlotAvailable} onCcdfSlotAvailableChange={setCcdfSlotAvailable}
-          childcareCounty={childcareCounty} onCountyChange={setChildcareCounty}
-          childcareWorkHours={childcareWorkHours} onWorkHoursChange={setChildcareWorkHours}
-          includeHeadStart={includeHeadStart} onIncludeHeadStartChange={setIncludeHeadStart}
-          childcareActivityEligible={childcareActivityEligible} onActivityEligibleChange={setChildcareActivityEligible}
-          error={errors.childcare}
-        />
-      )}
+  );
 
+  const childcareFields = country.id === "us" ? (
+    <USChildcareInputs regionCode={regionCode} childEntries={children} updateChild={updateChild}
+      hideWork progressive ccdfSlotAvailable={ccdfSlotAvailable} onCcdfSlotAvailableChange={setCcdfSlotAvailable}
+      childcareCounty={childcareCounty} onCountyChange={setChildcareCounty}
+      childcareWorkHours={childcareWorkHours} onWorkHoursChange={setChildcareWorkHours}
+      childcareActivityEligible={childcareActivityEligible} onActivityEligibleChange={setChildcareActivityEligible} />
+  ) : (
+    <MoneyField label="Annual childcare costs" symbol={country.currencySymbol} value={childcareCosts}
+      onChange={(value) => handleIncomeChange(setChildcareCosts, value)} onBlur={() => handleIncomeBlur(setChildcareCosts, childcareCosts, "childcareCosts")} />
+  );
+
+  const housingFields = (
+    <>
       {country.hasHousing && (
         <div className="sf-group">
           <div className="sf-group-title">Housing</div>
@@ -747,148 +645,68 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         </div>
       )}
 
-      {(country.hasChildcare || country.hasCapital) && (
-        <div className="sf-group">
-          <div className="sf-group-title">Costs and capital</div>
-          <div className="sf-row">
-            {country.hasChildcare && (!isWizard || children.length > 0 || parseNumber(childcareCosts) > 0) && (
-              <div className="sf-field sf-grow">
-                <label className="sf-label-tip">
-                  Childcare
-                  <span className="sf-label-tooltip">
-                    Yearly. Only paid when the work condition is met, and
-                    capped per child. Split evenly across the children.
-                  </span>
-                </label>
-                <div className="sf-input-prefix">
-                  <span>{country.currencySymbol}</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    aria-label="Annual childcare costs"
-                    value={childcareCosts}
-                    className={errors.childcareCosts ? "input-error" : ""}
-                    onChange={(e) => handleIncomeChange(setChildcareCosts, e.target.value)}
-                    onBlur={() => handleIncomeBlur(setChildcareCosts, childcareCosts, "childcareCosts")}
-                  />
-                </div>
-              </div>
-            )}
-            {country.hasCapital && (
-              <div className="sf-field sf-grow">
-                <label className="sf-label-tip">
-                  Savings
-                  <span className="sf-label-tooltip">
-                    Entitlement is nil above the upper capital limit.
-                    Split evenly between the two adults when living apart.
-                  </span>
-                </label>
-                <div className="sf-input-prefix">
-                  <span>{country.currencySymbol}</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    aria-label="Savings"
-                    value={savings}
-                    className={errors.savings ? "input-error" : ""}
-                    onChange={(e) => handleIncomeChange(setSavings, e.target.value)}
-                    onBlur={() => handleIncomeBlur(setSavings, savings, "savings")}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      {isWizard && country.hasHousing && (
-        <p className="wizard-default-note">
-          {rentsApply
-            ? "Results are after rent. When living apart, each household pays the annual rent entered here. Savings are split evenly between the adults."
-            : "No rent or mortgage costs are included for owners. Savings are split evenly between the adults when living apart."}
-        </p>
-      )}
+      <p className="journey-note">{rentsApply
+        ? "Results are after rent. When living apart, each household pays the annual rent entered here."
+        : "No rent or mortgage costs are included for owners."}</p>
     </>
   );
 
-  const stepTitles = ["Choose your comparison", "Describe your household", "Add relevant details"];
-  const stepDescriptions = [
-    "Choose where you live and what you want to compare.",
-    "Enter annual wages and salaries before tax for each adult, then add your children.",
-    "Review the defaults below and change the details that apply to your household.",
-  ];
-
   return (
-    <form ref={formRef} className={`sidebar-form${isWizard ? " wizard-form" : ""}`} onSubmit={handleSubmit} noValidate={isWizard}>
-      {isWizard ? (
-        <>
-          <nav className="wizard-progress" aria-label="Setup progress">
-            <ol>
-              {["Comparison", "Household", "Details"].map((label, index) => (
-                <li key={label} aria-current={index === wizardStep ? "step" : undefined} className={index < wizardStep ? "is-complete" : undefined}>
-                  <span className="wizard-step-number" aria-hidden="true">{index + 1}</span>
-                  <span>{label}</span>
-                </li>
-              ))}
-            </ol>
-          </nav>
-          <section className="wizard-step" aria-labelledby="wizard-step-title" key={wizardStep}>
-            <h2 className="wizard-step-title" id="wizard-step-title" tabIndex={-1} ref={stepHeadingRef}>{stepTitles[wizardStep]}</h2>
-            <p className="wizard-description">{stepDescriptions[wizardStep]}</p>
-            {errors.form && <p role="alert" tabIndex={-1} className="sf-childcare-error">{errors.form}</p>}
-            {wizardStep === 0 && comparisonFields}
-            {wizardStep === 1 && (
-              <>
-                <div className="wizard-household">{adultFields}</div>
-                {childrenFields}
-              </>
-            )}
-            {wizardStep === 2 && detailsFields}
-          </section>
-          <div className="wizard-actions">
-            {wizardStep > 0 && <button type="button" className="wizard-back" onClick={() => { setErrors({}); setWizardStep(wizardStep - 1); }}>Back</button>}
-            <button type="submit" className="btn-calc wizard-next" disabled={loading}>
-              {loading ? <><span className="spinner" /> Calculating...</> : wizardStep === 2 ? "Calculate" : "Continue"}
-            </button>
-          </div>
-          {onExitWizard && <button type="button" className="wizard-skip" onClick={onExitWizard}>Use full form</button>}
-        </>
-      ) : (
-        <>
-          {comparisonFields}
-          {adultFields}
-          <details className="sf-more">
-            <summary className="sf-more-summary">
-              More details
-              {extrasInUse > 0 && <span className="sf-more-badge">{extrasInUse}</span>}
-            </summary>
-            <div className="sf-more-body">{detailsFields}</div>
-          </details>
-          <button type="submit" className="btn-calc" disabled={loading}>
-            {loading ? <><span className="spinner" /> Calculating...</> : "Calculate"}
-          </button>
-        </>
-      )}
-      {(!isWizard || wizardStep === 2) && (
-        <details className="sf-assumptions">
-          <summary className="sf-assumptions-summary">Assumptions</summary>
-          <div className="sf-assumptions-body" role="note" aria-label="Model assumptions">
-            <ul className="sf-assumptions-list">
-              {assumptions.map((assumption) => (
-                <li key={assumption}>{assumption}</li>
-              ))}
-            </ul>
-          </div>
-        </details>
-      )}
+    <form ref={formRef} className="journey-form" onSubmit={handleSubmit} noValidate>
+      {!section && <nav className="journey-progress" aria-label="Setup progress">
+        <p>Step {stepIndex + 1} of {sections.length}</p>
+        <ol>{sections.map((item, index) => <li key={item.id} aria-current={activeSection === item.id ? "step" : undefined} className={index < stepIndex ? "is-complete" : undefined}>
+          <button type="button" disabled={index > furthestStep} onClick={() => { setErrors({}); setActiveSection(item.id); }}>{item.label}</button>
+        </li>)}</ol>
+      </nav>}
+      <section className="journey-step" aria-labelledby="journey-step-title" key={activeSection}>
+        <h2 id="journey-step-title" className="journey-step-title" tabIndex={-1} ref={stepHeadingRef}>{current.title}</h2>
+        <p className="journey-description">{followup && activeSection !== section ? "Review these details to finish updating your household." : current.description}</p>
+        {errors.form && <p role="alert" tabIndex={-1} className="sf-childcare-error">{errors.form}</p>}
+        {activeSection === "comparison" && comparisonFields}
+        {activeSection === "household" && <><div className="journey-people">{adultFields}</div>{childrenFields}</>}
+        {activeSection === "circumstances" && <>
+          {extraAdultFields(false)}
+          {country.id === "us" && <p className="journey-note">SSI disability means meeting its medical criteria and also applies disability status to other programs. Income and resources still affect eligibility.</p>}
+          {country.hasESI && <p className="journey-note">Employer health insurance affects healthcare eligibility. Healthcare values are shown separately from financial resources.</p>}
+        </>}
+        {activeSection === "work" && <>
+          <div className="journey-people">{[["head", "Your work hours / week"], ["spouse", "Partner’s work hours / week"]].map(([key, label]) => <div className="sf-field" key={key}>
+            <label htmlFor={`work-${key}`}>{label}</label>
+            <input id={`work-${key}`} type="number" min="0" max="168" step="any" value={childcareWorkHours[key]} onChange={(event) => setChildcareWorkHours({ ...childcareWorkHours, [key]: event.target.value === "" ? "" : Number(event.target.value) })} />
+          </div>)}</div>
+          <p className="journey-note">Hours default to 40 for each adult. They stay fixed across the income grid and may affect other benefits as well as childcare assistance.</p>
+        </>}
+        {activeSection === "childcare" && childcareFields}
+        {activeSection === "housing" && housingFields}
+        {activeSection === "finances" && <>
+          {extraAdultFields(true)}
+          {country.hasCapital && <MoneyField label="Savings" symbol={country.currencySymbol} value={savings} onChange={(value) => handleIncomeChange(setSavings, value)} onBlur={() => handleIncomeBlur(setSavings, savings, "savings")} />}
+          <p className="journey-note">Savings are split evenly between the adults when living apart.</p>
+        </>}
+      </section>
+      <div className="journey-actions">
+        {(section ? followup && activeSection !== section : stepIndex > 0) && <button type="button" className="journey-back" onClick={() => { setErrors({}); setActiveSection(section || sections[stepIndex - 1].id); setFollowup(null); }}>Back</button>}
+        {onCancel && <button type="button" className="journey-cancel" onClick={onCancel}>Cancel</button>}
+        <button type="submit" className="btn-calc journey-next" disabled={loading}>
+          {loading ? <><span className="spinner" /> Calculating...</> : section ? needsCareFollowup ? "Continue" : "Save changes" : lastStep ? "Calculate" : "Continue"}
+        </button>
+      </div>
+      {(!section && lastStep) && <details className="sf-assumptions">
+        <summary className="sf-assumptions-summary">Assumptions</summary>
+        <div className="sf-assumptions-body" role="note" aria-label="Model assumptions"><ul className="sf-assumptions-list">{assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}</ul></div>
+      </details>}
     </form>
   );
 }
 
-// Shared adult follow-ups for the guided details step and the results editor.
+function MoneyField({ label, symbol, value, onChange, onBlur }) {
+  return <div className="sf-field"><label>{label}</label><div className="sf-input-prefix"><span>{symbol}</span><input type="text" inputMode="numeric" aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} onBlur={onBlur} /></div></div>;
+}
+
+// Reused adult follow-ups, shown separately for circumstances and other income.
 function ExtraAdultFields({
   title, accent, currencySymbol,
-  income, onIncomeChange, onIncomeBlur, incomeError, showIncome,
-  age, onAgeChange, onAgeBlur, ageError,
   selfEmployment, onSelfEmploymentChange, onSelfEmploymentBlur, showSelfEmployment,
   pension, onPensionChange, onPensionBlur, showPension,
   carer, onCarerChange, showCarer,
@@ -899,45 +717,10 @@ function ExtraAdultFields({
 }) {
   const showMoney = showSelfEmployment || showPension;
   const showChecks = showCarer || showDisability || showPregnancy || showESI;
-  if (!showIncome && !showMoney && !showChecks) return null;
+  if (!showMoney && !showChecks) return null;
   return (
     <div className={`sf-extra sf-extra--${accent}`}>
       <div className="sf-extra-title">{title}</div>
-      {showIncome && (
-        <div className="sf-row">
-          <div className="sf-field sf-grow">
-            <label className="sf-label-tip">
-              Income
-              <span className="sf-label-tooltip">Wages and salaries.</span>
-            </label>
-            <div className="sf-input-prefix">
-              <span>{currencySymbol}</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                aria-label={`${title} income`}
-                value={income}
-                className={incomeError ? "input-error" : ""}
-                onChange={(e) => onIncomeChange(e.target.value)}
-                onBlur={onIncomeBlur}
-              />
-            </div>
-          </div>
-          <div className="sf-field sf-age">
-            <label>Age</label>
-            <input
-              type="number"
-              min="18"
-              max="100"
-              aria-label={`${title} age`}
-              value={age}
-              className={ageError ? "input-error" : ""}
-              onChange={(e) => onAgeChange(e.target.value)}
-              onBlur={onAgeBlur}
-            />
-          </div>
-        </div>
-      )}
       {showMoney && (
         <div className="sf-row">
           {showSelfEmployment && (
@@ -987,7 +770,6 @@ function ExtraAdultFields({
           )}
         </div>
       )}
-      {usesSSIDisability && <p className="sf-input-note">SSI medical criteria only. Also applies disability status to other programs; earnings, income, and resources still affect eligibility.</p>}
       {showChecks && (
         <div className="sf-checks">
           {showDisability && (
@@ -1045,7 +827,7 @@ function ExtraAdultFields({
                 onChange={(e) => onESIChange(e.target.checked)}
               />
               <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
-              Has ESI
+              Employer health insurance
             </label>
           )}
         </div>
@@ -1056,9 +838,7 @@ function ExtraAdultFields({
 
 function PersonSection({
   title, accent, income, onIncomeChange, onIncomeBlur, incomeError,
-  age, onAgeChange, onAgeBlur, ageError,
-  disabled, onDisabledChange, pregnant, onPregnantChange,
-  hasESI, onESIChange, showDisability, showPregnancy, showESI, currencySymbol,
+  age, onAgeChange, ageError, currencySymbol,
 }) {
   return (
     <div className={`sf-person sf-person--${accent}`}>
@@ -1093,35 +873,11 @@ function PersonSection({
             value={age}
             className={ageError ? "input-error" : ""}
             onChange={(e) => onAgeChange(e.target.value)}
-            onBlur={onAgeBlur}
           />
           {ageError && <span className="sf-error">{ageError}</span>}
         </div>
       </div>
-      <div className="sf-checks">
-        {showDisability && (
-          <label className="sf-toggle">
-            <input type="checkbox" checked={disabled} onChange={(e) => onDisabledChange(e.target.checked)} />
-            <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
-            Disabled
-          </label>
-        )}
-        {showPregnancy && (
-          <label className="sf-toggle">
-            <input type="checkbox" checked={pregnant} onChange={(e) => onPregnantChange(e.target.checked)} />
-            <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
-            Pregnant
-          </label>
-        )}
-        {showESI && (
-          <label className="sf-toggle sf-toggle-tip">
-            <input type="checkbox" checked={hasESI} onChange={(e) => onESIChange(e.target.checked)} />
-            <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
-            Has ESI
-            <span className="sf-toggle-tooltip">Employer-sponsored insurance affects healthcare eligibility. Healthcare values are shown separately from financial resources.</span>
-          </label>
-        )}
-      </div>
+
     </div>
   );
 }
