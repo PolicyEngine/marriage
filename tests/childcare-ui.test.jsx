@@ -22,7 +22,7 @@ const baseData = {
   ccdfSlotAvailable: true, childcareCounty: metadata.counties.CA[0].value,
   childcareWorkHours: { head: 40, spouse: 0 }, includeHeadStart: true,
 };
-const props = { country: COUNTRIES.us, countryId: "us", loading: false, onCalculate: vi.fn() };
+const props = { section: "childcare", country: COUNTRIES.us, countryId: "us", loading: false, onCalculate: vi.fn() };
 const scrollIntoView = HTMLElement.prototype.scrollIntoView;
 beforeAll(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); });
 afterAll(() => { HTMLElement.prototype.scrollIntoView = scrollIntoView; });
@@ -34,96 +34,59 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function openDetails() { fireEvent.click(screen.getByText("More details")); }
+function openDetails() {}
 async function choose(label, option) {
   fireEvent.keyDown(screen.getByRole("combobox", { name: label }), { key: "ArrowDown" });
   fireEvent.click(await screen.findByRole("option", { name: option }));
 }
 
-it("uses one SSI disability control per person while keeping the existing API contract", () => {
+it("uses one SSI disability control per adult and preserves the existing API contract", () => {
   const onCalculate = vi.fn();
-  const onInputChange = vi.fn();
-  render(<InputForm {...props} initialValues={baseData} onCalculate={onCalculate} onInputChange={onInputChange} />);
-  openDetails();
+  render(<InputForm {...props} section="circumstances" initialValues={baseData} onCalculate={onCalculate} />);
   fireEvent.click(screen.getByRole("checkbox", { name: "You meets SSI disability criteria" }));
-  fireEvent.click(screen.getByRole("checkbox", { name: "Child 1 meets SSI disability criteria" }));
   expect(screen.queryByRole("checkbox", { name: "You disabled" })).toBeNull();
-  expect(onInputChange).toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Assume a funded childcare slot" }));
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
-  expect(onCalculate.mock.calls[0][0]).toMatchObject({ disabilityStatus: { head: true }, children: [{ isDisabled: true }] });
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  expect(onCalculate.mock.calls[0][0]).toMatchObject({ disabilityStatus: { head: true }, children: [{ isDisabled: false }], childcareWorkHours: { spouse: 0 } });
 });
 
-it("keeps all childcare and SSI-specific controls out of the UK form", () => {
-  render(<InputForm {...props} country={COUNTRIES.uk} countryId="uk" />);
-  openDetails();
+it("keeps US-specific controls out of UK circumstances", () => {
+  render(<InputForm {...props} section="circumstances" country={COUNTRIES.uk} countryId="uk" />);
   expect(screen.getByRole("checkbox", { name: "You disabled" })).toBeTruthy();
-  expect(screen.queryByText("Include Head Start service values")).toBeNull();
   expect(screen.queryByRole("checkbox", { name: /SSI disability/ })).toBeNull();
+  expect(screen.queryByLabelText("Your work hours / week")).toBeNull();
 });
 
-it("calculates with no children or costs and validates assistance inputs once paid care is entered", async () => {
+it("validates assistance inputs once paid care is entered", async () => {
   const onCalculate = vi.fn();
-  render(<InputForm {...props} onCalculate={onCalculate} />);
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+  render(<InputForm {...props} initialValues={{ children: [{ age: 3 }] }} onCalculate={onCalculate} />);
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(onCalculate).toHaveBeenCalledOnce();
-  openDetails();
-  expect(screen.getByRole("checkbox", { name: "Assume a funded childcare slot" }).checked).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "Add child" }));
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
-  expect(onCalculate).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole("checkbox", { name: "Assume a funded childcare slot" })).toBeNull();
   fireEvent.change(screen.getByLabelText("Child 1 annual childcare price ($)"), { target: { value: "12000" } });
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(screen.getByRole("alert").textContent).toContain("Choose a county");
   await choose("Childcare county", metadata.counties.CA[0].label);
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(screen.getByRole("alert").textContent).toContain("provider type");
   await choose("Child 1 provider type", metadata.states.CA.providers[0].options[0].label);
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
-  expect(onCalculate).toHaveBeenCalledTimes(3);
-  expect(onCalculate.mock.calls[2][0]).toMatchObject({
-    ccdfSlotAvailable: true, childcareCounty: metadata.counties.CA[0].value,
-    childcareWorkHours: { head: 40, spouse: 40 },
-    children: [{ childcareCost: 12000, childcareHoursPerDay: 8, childcareDaysPerWeek: 5, childcareDaysPerMonth: 22 }],
-  });
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  expect(onCalculate).toHaveBeenCalledTimes(2);
+  expect(onCalculate.mock.calls[1][0]).toMatchObject({ ccdfSlotAvailable: true, childcareCounty: metadata.counties.CA[0].value, childcareWorkHours: { head: 40, spouse: 40 }, children: [{ childcareCost: 12000, childcareHoursPerDay: 8, childcareDaysPerWeek: 5, childcareDaysPerMonth: 22 }] });
 });
 
-it("clears stale results when a child's care or enrollment changes and permits zero adult work hours", () => {
-  const onInputChange = vi.fn();
+it("holds childcare edits in a draft until saving and preserves zero adult work hours", () => {
   const onCalculate = vi.fn();
-  render(<InputForm {...props} initialValues={baseData} onInputChange={onInputChange} onCalculate={onCalculate} />);
-  openDetails();
+  render(<InputForm {...props} initialValues={baseData} onCalculate={onCalculate} />);
   fireEvent.change(screen.getByLabelText("Child 1 annual childcare price ($)"), { target: { value: "10000" } });
   fireEvent.click(screen.getByRole("checkbox", { name: "Child 1 enrolled in Head Start or Early Head Start" }));
-  expect(onInputChange).toHaveBeenCalledTimes(2);
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+  expect(onCalculate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(onCalculate.mock.calls[0][0]).toMatchObject({ childcareWorkHours: { spouse: 0 }, children: [{ isHeadStartEnrolled: true }] });
 });
 
-it("clears county and irrelevant provider selections when switching states", async () => {
-  render(<InputForm {...props} initialValues={baseData} />);
-  openDetails();
-  await choose("State", "Colorado");
-  expect(screen.getByRole("combobox", { name: "Childcare county" }).textContent).toBe("Choose a county");
-  expect(screen.queryByRole("combobox", { name: "Child 1 provider type" })).toBeNull();
-});
-
-it("resets US childcare options when switching countries", () => {
-  const { rerender } = render(<InputForm {...props} initialValues={baseData} />);
-  rerender(<InputForm {...props} country={COUNTRIES.uk} countryId="uk" />);
-  rerender(<InputForm {...props} />);
-  openDetails();
-  expect(screen.getByRole("checkbox", { name: "Assume a funded childcare slot" }).checked).toBe(true);
-  expect(screen.queryByRole("checkbox", { name: "Include Head Start service values" })).toBeNull();
-});
-
 it("explains separate Head Start service values without an accounting toggle", () => {
-  const onCalculate = vi.fn();
-  render(<InputForm {...props} onCalculate={onCalculate} />);
-  openDetails();
+  render(<InputForm {...props} initialValues={baseData} />);
   expect(screen.queryByRole("checkbox", { name: "Include Head Start service values" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
-  expect(onCalculate.mock.calls[0][0]).toMatchObject({ ccdfSlotAvailable: true });
   expect(screen.getByText(/service values appear separately from financial resources/)).toBeTruthy();
 });
 
@@ -179,26 +142,23 @@ it.each(["MD", "MA"])("requires an explicit provider selection in %s instead of 
 });
 
 it("labels Arkansas's schedule selection as care type", () => {
-  render(<InputForm {...props} initialValues={{ ...baseData, regionCode: "AR", children: [{ age: 2 }] }} />);
+  render(<InputForm {...props} initialValues={{ ...baseData, regionCode: "AR", children: [{ age: 2, childcareCost: 1000 }] }} />);
   openDetails();
   expect(screen.getByRole("combobox", { name: "Child 1 care type" }).textContent).toBe("Choose a care type");
 });
 
 
-it("shows Nevada's activity confirmation only in Nevada and clears it when leaving the state", async () => {
+it("shows Nevada activity confirmation only for funded paid care", () => {
   const onCalculate = vi.fn();
-  const onInputChange = vi.fn();
-  render(<InputForm {...props} onCalculate={onCalculate} onInputChange={onInputChange}
-    initialValues={{ ...baseData, regionCode: "NV", childcareCounty: metadata.counties.NV[0].value, children: [{ age: 2, childcareCost: 1000 }] }} />);
-  openDetails();
+  render(<InputForm {...props} onCalculate={onCalculate} initialValues={{ ...baseData, regionCode: "NV", childcareCounty: metadata.counties.NV[0].value, children: [{ age: 2, childcareCost: 1000 }] }} />);
   const option = screen.getByRole("checkbox", { name: "Meets childcare work or activity requirements" });
   expect(option.checked).toBe(false);
   fireEvent.click(option);
-  expect(onInputChange).toHaveBeenCalledOnce();
-  await choose("State", "California");
+  expect(option.checked).toBe(true);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Assume a funded childcare slot" }));
   expect(screen.queryByRole("checkbox", { name: "Meets childcare work or activity requirements" })).toBeNull();
-  await choose("State", "Nevada");
-  expect(screen.getByRole("checkbox", { name: "Meets childcare work or activity requirements" }).checked).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  expect(onCalculate.mock.calls[0][0].childcareActivityEligible).toBe(true);
 });
 
 it("round-trips Nevada's activity confirmation without applying it to other states", () => {
@@ -224,7 +184,7 @@ it("accepts editable monthly attendance independently of weekly attendance", () 
   openDetails();
   fireEvent.change(screen.getByLabelText("Child 1 annual childcare price ($)"), { target: { value: "10000" } });
   fireEvent.change(screen.getByLabelText("Child 1 care days / month"), { target: { value: "17" } });
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(onCalculate.mock.calls[0][0].children[0]).toMatchObject({ childcareDaysPerWeek: 5, childcareDaysPerMonth: 17 });
 });
 
@@ -237,13 +197,12 @@ it("keeps paid costs, county, and work hours visible and preserved without a fun
   fireEvent.click(screen.getByRole("checkbox", { name: "Assume a funded childcare slot" }));
   expect(screen.getByRole("combobox", { name: "Childcare county" }).textContent).toBe(metadata.counties.CA[0].label);
   expect(screen.getByLabelText("Child 1 annual childcare price ($)").value).toBe("10000");
-  expect(screen.getByLabelText("Partner’s work hours / week").value).toBe("0");
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+  expect(screen.queryByLabelText("Partner’s work hours / week")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(onCalculate.mock.calls[0][0]).toMatchObject({
     ccdfSlotAvailable: false, childcareCounty: baseData.childcareCounty,
     children: [{ childcareCost: 10000 }], childcareWorkHours: { spouse: 0 },
   });
-  expect(screen.getByText(/may affect other benefits as well as childcare assistance/)).toBeTruthy();
 });
 
 it("allows paid care with no county or provider when a funded slot is unavailable", () => {
@@ -252,16 +211,14 @@ it("allows paid care with no county or provider when a funded slot is unavailabl
   expect(childCareFormError(data)).toBeNull();
   const onCalculate = vi.fn();
   render(<InputForm {...props} initialValues={data} onCalculate={onCalculate} />);
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(onCalculate).toHaveBeenCalledOnce();
 });
 
-it("keeps a selected county and nondefault hours visible after all children are removed", () => {
-  render(<InputForm {...props} initialValues={baseData} />);
-  openDetails();
-  fireEvent.click(screen.getByRole("button", { name: "Remove child 1" }));
+it("keeps a retained county editable without children", () => {
+  render(<InputForm {...props} initialValues={{ ...baseData, children: [] }} />);
   expect(screen.getByRole("combobox", { name: "Childcare county" }).textContent).toBe(metadata.counties.CA[0].label);
-  expect(screen.getByLabelText("Partner’s work hours / week").value).toBe("0");
+  expect(screen.queryByLabelText("Child 1 annual childcare price ($)")).toBeNull();
 });
 
 it("limits New York City county choices and validation to the five boroughs", async () => {
@@ -272,7 +229,7 @@ it("limits New York City county choices and validation to the five boroughs", as
   const data = { ...baseData, regionCode: "NYC", childcareCounty: "ALBANY_COUNTY_NY", ccdfSlotAvailable: false };
   expect(childCareFormError(data)).toContain("Choose a county");
   expect(childCareFormError({ ...data, childcareCounty: "KINGS_COUNTY_NY" })).toBeNull();
-  render(<InputForm {...props} initialValues={{ ...data, childcareCounty: "" }} />);
+  render(<InputForm {...props} initialValues={{ ...data, childcareCounty: "", children: [{ age: 3, childcareCost: 1000 }] }} />);
   openDetails();
   fireEvent.keyDown(screen.getByRole("combobox", { name: "Childcare county" }), { key: "ArrowDown" });
   await screen.findByRole("option", { name: counties[0].label });
@@ -293,18 +250,15 @@ it("shares an unavailable funded slot while preserving care costs and accepts ol
 });
 
 
-it("exposes both adults' work hours without children or paid care and preserves zero hours on submission", () => {
+it("exposes work hours independently of childcare and preserves zero on submission", () => {
   const onCalculate = vi.fn();
-  const onInputChange = vi.fn();
-  render(<InputForm {...props} onCalculate={onCalculate} onInputChange={onInputChange} />);
-  openDetails();
+  render(<InputForm {...props} section="work" onCalculate={onCalculate} />);
   expect(screen.getByLabelText("Your work hours / week").value).toBe("40");
   expect(screen.getByLabelText("Partner’s work hours / week").value).toBe("40");
-  expect(screen.getByText(/may affect other benefits as well as childcare assistance/)).toBeTruthy();
   expect(screen.queryByLabelText("Child 1 annual childcare price ($)")).toBeNull();
   fireEvent.change(screen.getByLabelText("Your work hours / week"), { target: { value: "0" } });
   fireEvent.change(screen.getByLabelText("Partner’s work hours / week"), { target: { value: "0" } });
-  expect(onInputChange).toHaveBeenCalledTimes(2);
-  fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+  expect(onCalculate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(onCalculate.mock.calls[0][0]).toMatchObject({ children: [], childcareWorkHours: { head: 0, spouse: 0 }, ccdfSlotAvailable: true });
 });

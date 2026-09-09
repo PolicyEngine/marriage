@@ -39,9 +39,8 @@ const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
 beforeAll(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); });
 afterAll(() => { HTMLElement.prototype.scrollIntoView = originalScrollIntoView; });
 
-async function selectLivingSeparately() {
-  fireEvent.keyDown(screen.getByRole("combobox", { name: "Unmarried living arrangement" }), { key: "ArrowDown" });
-  fireEvent.click(await screen.findByRole("option", { name: "Living separately" }));
+function selectLivingSeparately() {
+  fireEvent.click(screen.getByRole("radio", { name: /^Living separately/ }));
 }
 
 beforeEach(() => {
@@ -72,62 +71,53 @@ describe("comparison share links", () => {
     expect(new URLSearchParams(hash).get("year")).toBe("2026");
   });
 
-  it("hydrates the form and API request from a legacy link", async () => {
+  it("hydrates results and the focused comparison editor from a legacy link", async () => {
     getCategorizedPrograms.mockResolvedValue(separateResults);
     window.history.replaceState(null, "", "#region=CA&head=20000&spouse=15000");
     render(<React.StrictMode><MarriageApp initialCountry="us" /></React.StrictMode>);
     await screen.findByRole("heading", { name: "Effect of marrying and combining households" });
-    expect(screen.getByLabelText("Unmarried living arrangement").textContent).toBe("Living separately");
-    expect(screen.getByRole("textbox", { name: "You income" }).value).toBe("20,000");
+    expect(screen.queryByRole("textbox", { name: "You income" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Edit comparison" }));
+    expect((await screen.findByRole("radio", { name: /^Living separately/ })).checked).toBe(true);
     expect(getCategorizedPrograms.mock.calls[0][12].livingArrangement).toBe("separate");
     expect(new URLSearchParams(window.location.hash.slice(1)).get("living")).toBe("separate");
   });
 });
 
 describe("living arrangement form", () => {
-  const baseProps = { country: COUNTRIES.us, countryId: "us", onCalculate: vi.fn(), loading: false };
+  const baseProps = { country: COUNTRIES.us, countryId: "us", section: "comparison", onCalculate: vi.fn(), loading: false };
 
-  it("defaults new US visits to living together and sends the selected comparison", async () => {
+  it("defaults a new US comparison to living together and submits the selected baseline", () => {
     const onCalculate = vi.fn();
-    const onInputChange = vi.fn();
-    render(<InputForm {...baseProps} onCalculate={onCalculate} onInputChange={onInputChange} />);
-    const choice = screen.getByLabelText("Unmarried living arrangement");
-    expect(choice.textContent).toBe("Living together");
-    fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+    render(<InputForm {...baseProps} onCalculate={onCalculate} />);
+    expect(screen.getByRole("radio", { name: /^Living together/ }).checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(onCalculate.mock.calls[0][0].livingArrangement).toBe("cohabiting");
-    await selectLivingSeparately();
-    expect(onInputChange).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
+    selectLivingSeparately();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(onCalculate.mock.calls[1][0].livingArrangement).toBe("separate");
   });
 
   it("keeps the UK comparison unchanged", () => {
     render(<InputForm {...baseProps} country={COUNTRIES.uk} countryId="uk" />);
-    expect(screen.queryByLabelText("Unmarried living arrangement")).toBeNull();
-    expect(screen.getByText(/This compares a cohabiting couple with two separate households/)).toBeTruthy();
+    expect(screen.queryByRole("radio", { name: /^Living together/ })).toBeNull();
+    expect(screen.getByText(/UK benefits generally assess couples who live together/)).toBeTruthy();
   });
 
-  it("keeps heatmap results when income fields sync, but clears them for subsequent manual edits", () => {
-    const onInputChange = vi.fn();
-    const props = { ...baseProps, onInputChange };
-    const { rerender } = render(<InputForm {...props} />);
-    rerender(<InputForm {...props} externalIncomes={{ headIncome: 30000, spouseIncome: 25000 }} />);
-    expect(screen.getByRole("textbox", { name: "You income" }).value).toBe("30,000");
-    expect(onInputChange).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByRole("textbox", { name: "You income" }), { target: { value: "31000" } });
-    expect(onInputChange).toHaveBeenCalledOnce();
-  });
-
-  it("ignores an old response when the user changes the comparison during calculation", async () => {
+  it("ignores an old response after the user saves a different comparison", async () => {
     let resolve;
     getCategorizedPrograms.mockImplementationOnce(() => new Promise((r) => { resolve = r; }));
+    getCategorizedPrograms.mockResolvedValueOnce(separateResults);
+    window.history.replaceState(null, "", "#country=us&region=CA&head=20000&spouse=15000&living=cohabiting");
     render(<MarriageApp initialCountry="us" />);
-    fireEvent.click(screen.getByRole("button", { name: "Use full form" }));
-    fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
-    await selectLivingSeparately();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit comparison" }));
+    selectLivingSeparately();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByRole("heading", { name: "Effect of marrying and combining households" });
     await act(async () => { resolve(cohabitingResults); });
-    expect(screen.queryByTestId("metric-net")).toBeNull();
-    expect(getHeatmapData).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "Effect of marrying and combining households" })).toBeTruthy();
+    expect(getCategorizedPrograms.mock.calls[1][12].livingArrangement).toBe("separate");
+    expect(getHeatmapData).toHaveBeenCalledOnce();
   });
 });
 

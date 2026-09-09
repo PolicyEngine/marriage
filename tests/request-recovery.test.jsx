@@ -1,16 +1,18 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import MarriageApp from "../app/MarriageApp.jsx";
 import { getCategorizedPrograms, getHeatmapData } from "../lib/api.js";
 
 let submitted;
-vi.mock("../lib/api.js", () => ({ getCategorizedPrograms: vi.fn(), getHeatmapData: vi.fn() }));
+vi.mock("../lib/api.js", async (importOriginal) => ({
+  ...await importOriginal(), getCategorizedPrograms: vi.fn(), getHeatmapData: vi.fn(),
+}));
 vi.mock("../app/components/InputForm.jsx", () => ({
-  default: ({ onCalculate, onInputChange, onCountryChange }) => <div>
-    <button onClick={() => onCalculate(submitted)}>Submit inputs</button>
-    <button onClick={onInputChange}>Change inputs</button>
+  default: ({ onCalculate, onCancel, onCountryChange, section }) => <div>
+    <button onClick={() => onCalculate(submitted)}>{section ? "Save changes" : "Submit inputs"}</button>
+    {section && <button onClick={onCancel}>Cancel</button>}
     <button onClick={() => onCountryChange("uk")}>Switch country</button>
   </div>,
 }));
@@ -27,6 +29,10 @@ const deferred = () => {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
+async function edit(section = "household") {
+  fireEvent.click(screen.getByRole("button", { name: `Edit ${section}`, exact: true }));
+  return screen.findByRole("dialog", { name: "Edit your household" });
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -74,47 +80,76 @@ it("preserves scalar results after a heatmap failure and retries only the heatma
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-it("aborts a scalar request on input changes and ignores its late result", async () => {
+it("lets an active calculation finish while a draft editor is opened and canceled", async () => {
   const pending = deferred();
   getCategorizedPrograms.mockReturnValueOnce(pending.promise);
   render(<MarriageApp initialCountry="us" />);
   fireEvent.click(screen.getByRole("button", { name: "Submit inputs" }));
   const signal = getCategorizedPrograms.mock.calls[0][12].signal;
-  fireEvent.click(screen.getByRole("button", { name: "Change inputs" }));
-  expect(signal.aborted).toBe(true);
+  const dialog = await edit();
+  submitted = { ...submitted, headIncome: 90000 };
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel", exact: true }));
+  expect(signal.aborted).toBe(false);
   await act(async () => pending.resolve({ amount: 111 }));
-  expect(screen.queryByText("Calculated amount: 111")).toBeNull();
-  expect(getHeatmapData).not.toHaveBeenCalled();
+  await screen.findByText("Calculated amount: 111");
+  expect(getCategorizedPrograms).toHaveBeenCalledOnce();
+  expect(getHeatmapData.mock.calls[0][6]).toBe(20000);
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-it("cancels a pending heatmap when the country changes without showing an obsolete error", async () => {
+it("does not cancel a heatmap for a discarded country draft", async () => {
   const pending = deferred();
   getHeatmapData.mockReturnValueOnce(pending.promise);
   render(<MarriageApp initialCountry="us" />);
   fireEvent.click(screen.getByRole("button", { name: "Submit inputs" }));
   await waitFor(() => expect(getHeatmapData).toHaveBeenCalledOnce());
   const signal = getHeatmapData.mock.calls[0][12].signal;
-  fireEvent.click(screen.getByRole("button", { name: "Switch country" }));
-  expect(signal.aborted).toBe(true);
-  await act(async () => pending.reject(new DOMException("Cancelled", "AbortError")));
-  expect(screen.queryByRole("alert")).toBeNull();
-  expect(screen.queryByText("Calculated amount: 35000")).toBeNull();
+  const dialog = await edit("comparison");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Switch country" }));
+  expect(signal.aborted).toBe(false);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel", exact: true }));
+  await act(async () => pending.resolve({ ready: true }));
+  await screen.findByText("Heatmap ready");
+  expect(screen.getByText("Calculated amount: 35000")).toBeTruthy();
+  expect(getCategorizedPrograms).toHaveBeenCalledOnce();
+  expect(new URLSearchParams(window.location.hash.slice(1)).get("country")).toBe("us");
 });
 
-it("aborts an earlier submission and does not replace a newer result with its late failure", async () => {
+it("cancels a pending heatmap only when the new country is saved and ignores the obsolete error", async () => {
+  const pending = deferred();
+  getHeatmapData.mockReturnValueOnce(pending.promise);
+  render(<MarriageApp initialCountry="us" />);
+  fireEvent.click(screen.getByRole("button", { name: "Submit inputs" }));
+  await waitFor(() => expect(getHeatmapData).toHaveBeenCalledOnce());
+  const signal = getHeatmapData.mock.calls[0][12].signal;
+  const dialog = await edit("comparison");
+  fireEvent.click(within(dialog).getByRole("button", { name: "Switch country" }));
+  submitted = { ...submitted, regionCode: "ENGLAND", livingArrangement: "separate" };
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save changes", exact: true }));
+  expect(signal.aborted).toBe(true);
+  await waitFor(() => expect(getCategorizedPrograms).toHaveBeenCalledTimes(2));
+  expect(getCategorizedPrograms.mock.calls[1].slice(0, 2)).toEqual(["uk", "ENGLAND"]);
+  await act(async () => pending.reject(new DOMException("Cancelled", "AbortError")));
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByText("Calculated amount: 35000")).toBeTruthy();
+  expect(new URLSearchParams(window.location.hash.slice(1)).get("country")).toBe("uk");
+});
+
+it("aborts an earlier submission on Save and does not replace a newer result with its late failure", async () => {
   const pending = deferred();
   getCategorizedPrograms.mockReturnValueOnce(pending.promise);
   render(<MarriageApp initialCountry="us" />);
   fireEvent.click(screen.getByRole("button", { name: "Submit inputs" }));
   const firstSignal = getCategorizedPrograms.mock.calls[0][12].signal;
+  const dialog = await edit();
   submitted = { ...submitted, headIncome: 50000 };
-  fireEvent.click(screen.getByRole("button", { name: "Submit inputs" }));
+  fireEvent.click(within(dialog).getByRole("button", { name: "Save changes", exact: true }));
   expect(firstSignal.aborted).toBe(true);
   await screen.findByText("Calculated amount: 35000");
   await act(async () => pending.reject(new Error("Old response")));
   expect(screen.queryByRole("alert")).toBeNull();
   expect(screen.getByText("Calculated amount: 35000")).toBeTruthy();
+  expect(getCategorizedPrograms.mock.calls[1][2]).toBe(50000);
 });
 
 it("cancels the active request when the app unmounts", () => {

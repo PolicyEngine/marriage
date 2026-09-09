@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, Suspense, lazy } from "react";
 import { computeTableData, unmarriedTotal, PROGRAM_DESCRIPTIONS, formatCurrency, resourceValues } from "@/lib/utils";
 import { buildCellResults, buildCellBreakdown } from "@/lib/api";
 import MetricCards from "./MetricCards";
+import ImpactDrivers from "./ImpactDrivers";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@policyengine/ui-kit/primitives";
 
 const Heatmap = lazy(() => import("./Heatmap"));
@@ -276,6 +277,7 @@ export default function ResultsDisplay({
         countryId={countryId}
         livingArrangement={livingArrangement || (cohabiting ? "cohabiting" : "separate")}
       />
+      <ImpactDrivers results={activeResults} countryId={countryId} currencySymbol={sym} />
       {countryId === "us" && <ServiceValueComparison results={activeResults} unmarriedLabel={unmarriedLabel} />}
       <nav className="tab-bar" aria-label="Result categories">
         {visibleTabs.map((tab) => (
