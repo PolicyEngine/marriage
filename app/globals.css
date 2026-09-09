@@ -1977,7 +1977,10 @@ body footer .grid > div {
 .impact-driver-value.positive { color: var(--color-positive); }
 .impact-driver-value.negative { color: var(--color-negative); }
 .impact-driver-description { grid-column: 1 / -1; color: var(--muted-foreground); font-size: 0.8rem; }
-.household-edit-dialog { width: calc(100% - 2rem); max-width: 44rem !important; max-height: calc(100dvh - 2rem); overflow-y: auto; padding: 2rem; gap: 0.5rem; background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
+/* Keep modal layers above shared navigation (1000), with selects above editors. */
+.sf-select-content { z-index: 1102; }
+[data-slot="dialog-overlay"]:has(+ .household-edit-dialog) { z-index: 1100; }
+.household-edit-dialog { z-index: 1101; width: calc(100% - 2rem); max-width: 44rem !important; max-height: calc(100dvh - 2rem); overflow-y: auto; padding: 2rem; gap: 0.5rem; background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
 .household-edit-title { font-size: 0.8rem; font-weight: 500; color: var(--muted-foreground); }
 .household-edit-description { font-size: 0.8rem; line-height: 1.5; }
 .household-edit-dialog .journey-form { margin-top: 1.25rem; }

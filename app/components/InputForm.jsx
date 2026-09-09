@@ -54,8 +54,8 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   const [childcareWorkHours, setChildcareWorkHours] = useState(iv.childcareWorkHours || { head: 40, spouse: 40 });
   const [includeHeadStart, setIncludeHeadStart] = useState(iv.includeHeadStart || false);
   const [childcareActivityEligible, setChildcareActivityEligible] = useState(iv.childcareActivityEligible || false);
-  const [headAge, setHeadAge] = useState(iv.headAge ? String(iv.headAge) : String(country.defaultAge));
-  const [spouseAge, setSpouseAge] = useState(iv.spouseAge ? String(iv.spouseAge) : String(country.defaultAge));
+  const [headAge, setHeadAge] = useState(iv.headAge != null ? String(iv.headAge) : String(country.defaultAge));
+  const [spouseAge, setSpouseAge] = useState(iv.spouseAge != null ? String(iv.spouseAge) : String(country.defaultAge));
   const [headPregnant, setHeadPregnant] = useState(iv.pregnancyStatus?.head || false);
   const [spousePregnant, setSpousePregnant] = useState(iv.pregnancyStatus?.spouse || false);
   const [headESI, setHeadESI] = useState(iv.esiStatus?.head || false);
@@ -305,6 +305,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   ));
 
   function showError(target, message, fields = {}) {
+    if (section && activeSection !== target) setFollowup(section);
     setActiveSection(target);
     setErrors({ ...fields, form: message });
   }
@@ -312,7 +313,10 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   function handleSubmit(e) {
     e.preventDefault();
     if (loading) return;
-    if (activeSection === "household") {
+    // Progress navigation can revisit answers without submitting their topic.
+    // Check the raw draft again before committing; normalization supplies fallbacks.
+    const committing = Boolean(section) || lastStep;
+    if (activeSection === "household" || committing) {
       const ageErrors = {};
       for (const [field, value] of [["headAge", headAge], ["spouseAge", spouseAge]]) {
         if (value === "" || !Number.isInteger(Number(value)) || Number(value) < 18 || Number(value) > 100) ageErrors[field] = "Enter a whole-number age from 18 to 100.";
@@ -325,7 +329,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         return;
       }
     }
-    if (activeSection === "work" && Object.values(childcareWorkHours).some((value) => value === "" || !Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 168)) {
+    if (country.id === "us" && (activeSection === "work" || committing) && [childcareWorkHours.head, childcareWorkHours.spouse].some((value) => value === "" || value == null || !Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 168)) {
       showError("work", "Enter weekly work hours between 0 and 168 for each adult.");
       return;
     }
@@ -334,7 +338,6 @@ export default function InputForm({ country, countries, countryId, onCountryChan
       const error = childCareFormError(data);
       if (error) {
         const target = error.includes("weekly work hours") ? "work" : "childcare";
-        if (section && activeSection !== target) setFollowup(activeSection);
         showError(target, error);
         return;
       }

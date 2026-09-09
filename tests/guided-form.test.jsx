@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { afterEach, beforeAll, afterAll, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import InputForm from "../app/components/InputForm.jsx";
 import { getInputSections } from "../lib/inputSections.js";
 import { COUNTRIES } from "../lib/countries.js";
@@ -200,6 +200,95 @@ describe("focused household journey", () => {
     next();
     expect(screen.getByRole("heading", { name: "Do you pay for childcare?" })).toBeTruthy();
     expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it.each(["", "17", "101", "35.5"])("revalidates revisited adult age %j after a progress jump to Calculate", (value) => {
+    const formProps = props();
+    render(<InputForm {...formProps} />);
+    next(); next(); next();
+    const navigation = within(screen.getByRole("navigation", { name: "Setup progress" }));
+    fireEvent.click(navigation.getByRole("button", { name: "Household", exact: true }));
+    fireEvent.change(screen.getByLabelText("You age"), { target: { value } });
+    fireEvent.click(navigation.getByRole("button", { name: "Work", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Calculate", exact: true }));
+    expect(formProps.onCalculate).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "Who is in your household?" })).toBeTruthy();
+    expect(screen.getByLabelText("You age").value).toBe(value);
+    expect(document.activeElement).toBe(screen.getByRole("alert"));
+    fireEvent.change(screen.getByLabelText("You age"), { target: { value: "63" } });
+    fireEvent.click(navigation.getByRole("button", { name: "Work", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Calculate", exact: true }));
+    expect(formProps.onCalculate.mock.calls[0][0].headAge).toBe(63);
+  });
+
+  it("revalidates a revisited child age after jumping straight to Childcare", () => {
+    const formProps = props({ initialValues: { children: [{ age: 3 }] } });
+    render(<InputForm {...formProps} />);
+    next(); next(); next(); next();
+    const navigation = within(screen.getByRole("navigation", { name: "Setup progress" }));
+    fireEvent.click(navigation.getByRole("button", { name: "Household", exact: true }));
+    fireEvent.change(screen.getByLabelText("Child 1 age"), { target: { value: "-1" } });
+    fireEvent.click(navigation.getByRole("button", { name: "Childcare", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Calculate", exact: true }));
+    expect(formProps.onCalculate).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Child 1 age").value).toBe("-1");
+    expect(document.activeElement).toBe(screen.getByRole("alert"));
+    fireEvent.change(screen.getByLabelText("Child 1 age"), { target: { value: "0" } });
+    fireEvent.click(navigation.getByRole("button", { name: "Childcare", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Calculate", exact: true }));
+    expect(formProps.onCalculate.mock.calls[0][0].children[0].age).toBe(0);
+  });
+
+  it("rejects blank revisited work hours after jumping to Childcare and accepts explicit zero", () => {
+    const formProps = props({ initialValues: { children: [{ age: 3 }] } });
+    render(<InputForm {...formProps} />);
+    next(); next(); next(); next();
+    const navigation = within(screen.getByRole("navigation", { name: "Setup progress" }));
+    fireEvent.click(navigation.getByRole("button", { name: "Work", exact: true }));
+    fireEvent.change(screen.getByLabelText("Your work hours / week"), { target: { value: "" } });
+    fireEvent.click(navigation.getByRole("button", { name: "Childcare", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Calculate", exact: true }));
+    expect(formProps.onCalculate).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "How many hours do you work?" })).toBeTruthy();
+    expect(screen.getByLabelText("Your work hours / week").value).toBe("");
+    expect(document.activeElement).toBe(screen.getByRole("alert"));
+    fireEvent.change(screen.getByLabelText("Your work hours / week"), { target: { value: "0" } });
+    fireEvent.click(navigation.getByRole("button", { name: "Childcare", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Calculate", exact: true }));
+    expect(formProps.onCalculate.mock.calls[0][0].childcareWorkHours.head).toBe(0);
+  });
+
+  it("revalidates both UK adults before committing from Other income and savings", () => {
+    const formProps = props({ country: COUNTRIES.uk, countryId: "uk" });
+    render(<InputForm {...formProps} />);
+    next(); next(); next(); next();
+    const navigation = within(screen.getByRole("navigation", { name: "Setup progress" }));
+    fireEvent.click(navigation.getByRole("button", { name: "Household", exact: true }));
+    fireEvent.change(screen.getByLabelText("Your partner age"), { target: { value: "101" } });
+    fireEvent.click(navigation.getByRole("button", { name: "Other income and savings", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Calculate", exact: true }));
+    expect(formProps.onCalculate).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Your partner age").value).toBe("101");
+    expect(document.activeElement).toBe(screen.getByRole("alert"));
+  });
+
+  it.each([
+    [{ headAge: 0, children: [] }, "Who is in your household?", "You age", "64", "headAge"],
+    [{ childcareWorkHours: { head: "", spouse: 40 } }, "How many hours do you work?", "Your work hours / week", "0", "childcareWorkHours"],
+  ])("checks hidden raw answers on section Save and preserves return to the edited topic", (initialValues, heading, label, correction, field) => {
+    const formProps = props({ section: "circumstances", initialValues });
+    render(<InputForm {...formProps} />);
+    save();
+    expect(formProps.onCalculate).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: heading })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("alert"));
+    fireEvent.click(screen.getByRole("button", { name: "Back", exact: true }));
+    expect(screen.getByRole("heading", { name: "Do any of these apply?" })).toBeTruthy();
+    save();
+    fireEvent.change(screen.getByLabelText(label), { target: { value: correction } });
+    save();
+    expect(formProps.onCalculate).toHaveBeenCalledOnce();
+    expect(formProps.onCalculate.mock.calls[0][0][field]).toEqual(field === "headAge" ? 64 : { head: 0, spouse: 40 });
   });
 
   it("keeps retained county and UK care costs discoverable without children", () => {
