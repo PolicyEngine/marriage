@@ -247,6 +247,7 @@ describe("Country toggle", () => {
     const note = within(details).getByRole("note", { name: "Model assumptions" });
     expect(within(note).getByText(/wages and salaries only/i)).toBeTruthy();
     expect(within(note).getByText(/all children are assigned to you/i)).toBeTruthy();
-    expect(within(note).getByText(/healthcare benefits are excluded from the analysis/i)).toBeTruthy();
+    expect(within(note).getByText(/employer-sponsored insurance/i)).toBeTruthy();
+    expect(within(note).queryByText(/healthcare benefits are excluded from the analysis/i)).toBeNull();
   });
 });
