@@ -34,7 +34,13 @@ function joinWithAnd(items) {
 
 const DEFAULT_INCOME = 45000;
 
-export default function InputForm({ country, countries, countryId, onCountryChange, onCalculate, onInputChange, loading, initialValues, externalIncomes }) {
+export default function InputForm({ country, countries, countryId, onCountryChange, onCalculate, onInputChange, loading, initialValues, externalIncomes, mode = "editor", onExitWizard }) {
+  const isWizard = mode === "wizard";
+  const [wizardStep, setWizardStep] = useState(0);
+  const formRef = useRef(null);
+  const stepHeadingRef = useRef(null);
+  const previousStep = useRef(wizardStep);
+  const previousWizard = useRef(isWizard);
   const iv = initialValues || {};
   const [regionCode, setRegionCode] = useState(iv.regionCode || iv.stateCode || country.defaultRegion);
   const [headIncome, setHeadIncome] = useState(
@@ -85,6 +91,23 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     formatIncome(iv.pensionIncome?.spouse || 0),
   );
   const [errors, setErrors] = useState({});
+  useEffect(() => {
+    if (isWizard && (!previousWizard.current || previousStep.current !== wizardStep)) {
+      stepHeadingRef.current?.focus({ preventScroll: true });
+      formRef.current?.scrollIntoView?.({ block: "start" });
+    }
+    previousStep.current = wizardStep;
+    previousWizard.current = isWizard;
+  }, [isWizard, wizardStep]);
+
+  useEffect(() => {
+    if (!errors.form && !errors.childcare) return;
+    const alert = formRef.current?.querySelector('[role="alert"]');
+    if (alert) {
+      alert.tabIndex = -1;
+      alert.focus();
+    }
+  }, [errors, wizardStep]);
   const previousInputs = useRef(null);
   const syncedIncomes = useRef(null);
   const childrenKey = JSON.stringify(children);
@@ -102,9 +125,6 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   // Everything under "More details" is optional and country-gated. The badge
   // counts how many are actually set, so a collapsed panel never hides an
   // input that is changing the result.
-  // The panel always exists: it holds the partner and children as well as the
-  // optional Universal Credit inputs.
-  const hasExtraInputs = true;
   const extrasInUse = [
     rentsApply && parseNumber(rent) > 0,
     parseNumber(childcareCosts) > 0,
@@ -183,7 +203,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
     );
   }
   if (country.hasESI) {
-    assumptions.push("If Has ESI is checked, healthcare benefits are excluded from the analysis.");
+    assumptions.push("Employer-sponsored insurance affects each adult’s healthcare eligibility. Healthcare values are shown separately from financial resources.");
   }
 
   // Reset region and defaults when country changes
@@ -337,6 +357,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   }
 
   function handleAgeBlur(setter, value, field) {
+    if (isWizard) return;
     let num = Number(value);
     if (Number.isNaN(num) || value === "") num = country.defaultAge;
     const clamped = clamp(Math.round(num), 18, 100);
@@ -345,6 +366,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
   }
 
   function handleChildAgeBlur(index, value) {
+    if (isWizard) return;
     let num = Number(value);
     if (Number.isNaN(num) || value === "") num = 0;
     const clamped = clamp(Math.round(num), 0, 18);
@@ -362,19 +384,45 @@ export default function InputForm({ country, countries, countryId, onCountryChan
 
   function handleSubmit(e) {
     e.preventDefault();
+    if (loading) return;
+    if (isWizard && wizardStep > 0) {
+      const ageErrors = {};
+      for (const [field, value] of [["headAge", headAge], ["spouseAge", spouseAge]]) {
+        if (value === "" || !Number.isInteger(Number(value)) || Number(value) < 18 || Number(value) > 100) {
+          ageErrors[field] = "Enter a whole-number age from 18 to 100.";
+        }
+      }
+      children.forEach((child, index) => {
+        if (child.age === "" || !Number.isInteger(Number(child.age)) || Number(child.age) < 0 || Number(child.age) > 18) {
+          ageErrors[`childAge${index}`] = "Enter a whole-number age from 0 to 18.";
+        }
+      });
+      if (Object.keys(ageErrors).length > 0) {
+        setErrors({ ...ageErrors, form: "Check the ages below: adults must be 18–100 and children 0–18, in whole years." });
+        setWizardStep(1);
+        return;
+      }
+    }
+    if (isWizard && !e.currentTarget.reportValidity()) return;
+    if (isWizard && wizardStep < 2) {
+      setErrors({});
+      setWizardStep(wizardStep + 1);
+      return;
+    }
     const data = buildFormData();
     const childcareError = country.id === "us" ? childCareFormError(data) : null;
     if (childcareError) {
       setErrors((current) => ({ ...current, childcare: childcareError }));
-      e.currentTarget.querySelector(".sf-more").open = true;
+      const details = e.currentTarget.querySelector(".sf-more");
+      if (details) details.open = true;
       return;
     }
     setErrors({});
     onCalculate(data);
   }
 
-  return (
-    <form className="sidebar-form" onSubmit={handleSubmit}>
+  const comparisonFields = (
+    <>
       {countries && (
         <div className="sf-field">
           <div className="country-toggle">
@@ -383,6 +431,7 @@ export default function InputForm({ country, countries, countryId, onCountryChan
                 key={c.id}
                 type="button"
                 className={`country-toggle-btn${countryId === c.id ? " active" : ""}`}
+                aria-pressed={countryId === c.id}
                 onClick={() => onCountryChange(c.id)}
               >
                 {c.name}
@@ -430,6 +479,20 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         </div>
       )}
 
+      {isWizard && (
+        <p className="wizard-comparison-note">
+          {country.id === "uk"
+            ? "Compare living together as a couple with living in separate households. UK benefits generally assess couples who live together, whether or not they are married."
+            : livingArrangement === "cohabiting"
+              ? "Compare being married with being unmarried while sharing a home, food and resources. Household benefits such as SNAP use a shared household in both scenarios."
+              : "Compare being married and living together with being unmarried in separate homes. This includes the effect of combining households. Savings from sharing housing costs are not included."}
+        </p>
+      )}
+    </>
+  );
+
+  const adultFields = (
+    <>
       <PersonSection
         title="You"
         accent="you"
@@ -469,279 +532,359 @@ export default function InputForm({ country, countries, countryId, onCountryChan
         showESI={false}
         currencySymbol={country.currencySymbol}
       />
+    </>
+  );
 
-      {hasExtraInputs && (
-        <details className="sf-more">
-          <summary className="sf-more-summary">
-            More details
-            {extrasInUse > 0 && <span className="sf-more-badge">{extrasInUse}</span>}
-          </summary>
-          <div className="sf-more-body">
-            <ExtraAdultFields
-              title="You"
-              accent="you"
-              currencySymbol={country.currencySymbol}
-              selfEmployment={headSelfEmp}
-              onSelfEmploymentChange={(v) => handleIncomeChange(setHeadSelfEmp, v)}
-              onSelfEmploymentBlur={() => handleIncomeBlur(setHeadSelfEmp, headSelfEmp, "headSelfEmp")}
-              pension={headPension}
-              onPensionChange={(v) => handleIncomeChange(setHeadPension, v)}
-              onPensionBlur={() => handleIncomeBlur(setHeadPension, headPension, "headPension")}
-              carer={headCarer}
-              onCarerChange={setHeadCarer}
-              disabled={headDisabled}
-              onDisabledChange={setHeadDisabled}
-              pregnant={headPregnant}
-              onPregnantChange={setHeadPregnant}
-              hasESI={headESI}
-              onESIChange={setHeadESI}
-              showSelfEmployment={country.hasSelfEmployment}
-              showPension={country.hasPensionIncome}
-              showCarer={country.hasCarer}
-              usesSSIDisability={country.id === "us"}
-              showDisability={country.hasDisability}
-              showPregnancy={country.hasPregnancy}
-              showESI={country.hasESI}
-            />
-
-            <ExtraAdultFields
-              title="Your partner"
-              accent="partner"
-              currencySymbol={country.currencySymbol}
-              selfEmployment={spouseSelfEmp}
-              onSelfEmploymentChange={(v) => handleIncomeChange(setSpouseSelfEmp, v)}
-              onSelfEmploymentBlur={() => handleIncomeBlur(setSpouseSelfEmp, spouseSelfEmp, "spouseSelfEmp")}
-              pension={spousePension}
-              onPensionChange={(v) => handleIncomeChange(setSpousePension, v)}
-              onPensionBlur={() => handleIncomeBlur(setSpousePension, spousePension, "spousePension")}
-              carer={spouseCarer}
-              onCarerChange={setSpouseCarer}
-              disabled={spouseDisabled}
-              onDisabledChange={setSpouseDisabled}
-              pregnant={spousePregnant}
-              onPregnantChange={setSpousePregnant}
-              hasESI={spouseESI}
-              onESIChange={setSpouseESI}
-              showSelfEmployment={country.hasSelfEmployment}
-              showPension={country.hasPensionIncome}
-              showCarer={country.hasCarer}
-              usesSSIDisability={country.id === "us"}
-              showDisability={country.hasDisability}
-              showPregnancy={country.hasPregnancy}
-              showESI={country.hasESI}
-            />
-
-            <div className="sf-children">
-              <div className="sf-children-header">
-                <span className="sf-children-label sf-label-tip">
-                  Children
-                  <span className="sf-label-tooltip">All dependents are attributed to the head of household when considering unmarried filers.</span>
-                </span>
-                <button
-                  type="button"
-                  className="btn-add-child"
-                  aria-label="Add child"
-                  onClick={() => setChildren([...children, { age: "5", isDisabled: false }])}
-                >+</button>
-              </div>
-              {children.map((child, i) => (
-                <div className={`sf-child${country.id === "us" ? " sf-child--us" : ""}`} key={i}>
-                  <div className="sf-child-age">
-                    <input
-                      type="number"
-                      min="0"
-                      max="18"
-                      placeholder="Age"
-                      aria-label={`Child ${i + 1} age`}
-                      value={child.age}
-                      className={errors[`childAge${i}`] ? "input-error" : ""}
-                      onChange={(e) => updateChild(i, "age", e.target.value)}
-                      onBlur={() => handleChildAgeBlur(i, child.age)}
-                    />
-                    <span className="sf-child-age-suffix">yr</span>
-                  </div>
-                  <label className="sf-toggle">
-                    <input
-                      type="checkbox"
-                      checked={child.isDisabled || false}
-                      aria-label={`Child ${i + 1} ${country.id === "us" ? "meets SSI disability criteria" : "disabled"}`}
-                      onChange={(e) => updateChild(i, "isDisabled", e.target.checked)}
-                    />
-                    <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
-                    {country.id === "us" ? "Meets SSI disability criteria" : "Disabled"}
-                  </label>
-                  <button
-                    type="button"
-                    className="sf-child-rm"
-                    aria-label={`Remove child ${i + 1}`}
-                    onClick={() => setChildren(children.filter((_, j) => j !== i))}
-                  >&times;</button>
-                </div>
-              ))}
-            </div>
-
-            {country.id === "us" && (
-              <USChildcareInputs
-                regionCode={regionCode} childEntries={children} updateChild={updateChild}
-                ccdfSlotAvailable={ccdfSlotAvailable} onCcdfSlotAvailableChange={setCcdfSlotAvailable}
-                childcareCounty={childcareCounty} onCountyChange={setChildcareCounty}
-                childcareWorkHours={childcareWorkHours} onWorkHoursChange={setChildcareWorkHours}
-                includeHeadStart={includeHeadStart} onIncludeHeadStartChange={setIncludeHeadStart}
-                childcareActivityEligible={childcareActivityEligible} onActivityEligibleChange={setChildcareActivityEligible}
-                error={errors.childcare}
+  const childrenFields = (
+    <>
+      <div className="sf-children">
+        <div className="sf-children-header">
+          <span className="sf-children-label sf-label-tip">
+            Children
+            <span className="sf-label-tooltip">All dependents are attributed to the head of household when considering unmarried filers.</span>
+          </span>
+          <button
+            type="button"
+            className="btn-add-child"
+            aria-label="Add child"
+            onClick={() => setChildren([...children, { age: "5", isDisabled: false }])}
+          >+</button>
+        </div>
+        {children.map((child, i) => (
+          <div className={`sf-child${country.id === "us" ? " sf-child--us" : ""}`} key={i}>
+            <div className="sf-child-age">
+              <input
+                type="number"
+                min="0"
+                max="18"
+                placeholder="Age"
+                aria-label={`Child ${i + 1} age`}
+                value={child.age}
+                className={errors[`childAge${i}`] ? "input-error" : ""}
+                onChange={(e) => updateChild(i, "age", e.target.value)}
+                onBlur={() => handleChildAgeBlur(i, child.age)}
               />
-            )}
+              <span className="sf-child-age-suffix">yr</span>
+            </div>
+            <label className="sf-toggle">
+              <input
+                type="checkbox"
+                checked={child.isDisabled || false}
+                aria-label={`Child ${i + 1} ${country.id === "us" ? "meets SSI disability criteria" : "disabled"}`}
+                onChange={(e) => updateChild(i, "isDisabled", e.target.checked)}
+              />
+              <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
+              {country.id === "us" ? "Meets SSI disability criteria" : "Disabled"}
+            </label>
+            <button
+              type="button"
+              className="sf-child-rm"
+              aria-label={`Remove child ${i + 1}`}
+              onClick={() => setChildren(children.filter((_, j) => j !== i))}
+            >&times;</button>
+          </div>
+        ))}
+      </div>
 
-            {country.hasHousing && (
-              <div className="sf-group">
-                <div className="sf-group-title">Housing</div>
-                <div className="sf-row">
-                  <div className="sf-field sf-grow">
-                    <label htmlFor="tenure" className="sf-label-tip">
-                      Tenure
-                      <span className="sf-label-tooltip">
-                        Private rent is capped at the Local Housing Allowance
-                        rate. Social rent is not. Owners get no housing element.
-                      </span>
-                    </label>
-                    <FormSelect
-                      id="tenure"
-                      label="Tenure"
-                      value={tenureType}
-                      onValueChange={setTenureType}
-                      options={[
-                        { value: "OWNED_OUTRIGHT", label: "Owned outright" },
-                        { value: "OWNED_WITH_MORTGAGE", label: "Owned with a mortgage" },
-                        { value: "RENT_PRIVATELY", label: "Rented privately" },
-                        { value: "RENT_FROM_COUNCIL", label: "Rented from council" },
-                        { value: "RENT_FROM_HA", label: "Rented from housing association" },
-                      ]}
-                    />
-                  </div>
-                  <div className="sf-field sf-money">
-                    <label className="sf-label-tip">
-                      Rent
-                      <span className="sf-label-tooltip">
-                        Yearly. Drives the housing element. Net income is shown
-                        after rent, and each household pays it when living apart.
-                      </span>
-                    </label>
-                    <div className="sf-input-prefix">
-                      <span>{country.currencySymbol}</span>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        aria-label="Annual rent"
-                        value={rentsApply ? rent : ""}
-                        placeholder={rentsApply ? "" : "n/a"}
-                        disabled={!rentsApply}
-                        className={errors.rent ? "input-error" : ""}
-                        onChange={(e) => handleIncomeChange(setRent, e.target.value)}
-                        onBlur={() => handleIncomeBlur(setRent, rent, "rent")}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+      {isWizard && (
+        <p className="wizard-default-note">
+          {children.length === 0
+            ? "No children included. Add each child whose taxes and benefits you want to include."
+            : country.id === "us"
+              ? `All children are assumed to be both adults’ children. In the unmarried comparison, you claim all children for taxes.${livingArrangement === "cohabiting" ? " You are assumed to pay more than half the cost of keeping up the home." : " The children and their childcare costs stay with you."}`
+              : "When living apart, all children are assumed to live with you."}
+        </p>
+      )}
+    </>
+  );
 
-            {country.hasHousing && tenureType === "RENT_PRIVATELY" && (
-              <div className="sf-field">
-                <label htmlFor="rental-market-area" className="sf-label-tip">
-                  Rental market area
-                  <span className="sf-label-tooltip">
-                    Private rent is capped at the Local Housing Allowance rate
-                    for the local Broad Rental Market Area, which varies widely.
-                    Social rent is not capped, so this does not apply there.
-                  </span>
-                </label>
-                <FormSelect
-                  id="rental-market-area"
-                  label="Rental market area"
-                  value={brma}
-                  onValueChange={setBrma}
-                  options={UK_BRMAS.map((area) => ({ value: area.code, label: area.name }))}
+  const detailsFields = (
+    <>
+      <div className={isWizard ? "wizard-adult-details" : "sf-more-people"}>
+        <ExtraAdultFields
+          title="You"
+          accent="you"
+          currencySymbol={country.currencySymbol}
+          selfEmployment={headSelfEmp}
+          onSelfEmploymentChange={(v) => handleIncomeChange(setHeadSelfEmp, v)}
+          onSelfEmploymentBlur={() => handleIncomeBlur(setHeadSelfEmp, headSelfEmp, "headSelfEmp")}
+          pension={headPension}
+          onPensionChange={(v) => handleIncomeChange(setHeadPension, v)}
+          onPensionBlur={() => handleIncomeBlur(setHeadPension, headPension, "headPension")}
+          carer={headCarer}
+          onCarerChange={setHeadCarer}
+          disabled={headDisabled}
+          onDisabledChange={setHeadDisabled}
+          pregnant={headPregnant}
+          onPregnantChange={setHeadPregnant}
+          hasESI={headESI}
+          onESIChange={setHeadESI}
+          showSelfEmployment={country.hasSelfEmployment}
+          showPension={country.hasPensionIncome}
+          showCarer={country.hasCarer}
+          usesSSIDisability={country.id === "us"}
+          showDisability={country.hasDisability}
+          showPregnancy={country.hasPregnancy}
+          showESI={country.hasESI}
+        />
+
+        <ExtraAdultFields
+          title="Your partner"
+          accent="partner"
+          currencySymbol={country.currencySymbol}
+          selfEmployment={spouseSelfEmp}
+          onSelfEmploymentChange={(v) => handleIncomeChange(setSpouseSelfEmp, v)}
+          onSelfEmploymentBlur={() => handleIncomeBlur(setSpouseSelfEmp, spouseSelfEmp, "spouseSelfEmp")}
+          pension={spousePension}
+          onPensionChange={(v) => handleIncomeChange(setSpousePension, v)}
+          onPensionBlur={() => handleIncomeBlur(setSpousePension, spousePension, "spousePension")}
+          carer={spouseCarer}
+          onCarerChange={setSpouseCarer}
+          disabled={spouseDisabled}
+          onDisabledChange={setSpouseDisabled}
+          pregnant={spousePregnant}
+          onPregnantChange={setSpousePregnant}
+          hasESI={spouseESI}
+          onESIChange={setSpouseESI}
+          showSelfEmployment={country.hasSelfEmployment}
+          showPension={country.hasPensionIncome}
+          showCarer={country.hasCarer}
+          usesSSIDisability={country.id === "us"}
+          showDisability={country.hasDisability}
+          showPregnancy={country.hasPregnancy}
+          showESI={country.hasESI}
+        />
+
+      </div>
+      {isWizard && country.hasESI && (
+        <p className="wizard-default-note">Has ESI means employer-sponsored health insurance. Leave it off for an adult without that coverage. Healthcare values appear separately from financial resources.</p>
+      )}
+      {!isWizard && childrenFields}
+      {country.id === "us" && (
+        <USChildcareInputs
+          regionCode={regionCode} childEntries={children} updateChild={updateChild}
+          hideChildcare={isWizard && children.length === 0 && !childcareCounty}
+          progressive={isWizard}
+          ccdfSlotAvailable={ccdfSlotAvailable} onCcdfSlotAvailableChange={setCcdfSlotAvailable}
+          childcareCounty={childcareCounty} onCountyChange={setChildcareCounty}
+          childcareWorkHours={childcareWorkHours} onWorkHoursChange={setChildcareWorkHours}
+          includeHeadStart={includeHeadStart} onIncludeHeadStartChange={setIncludeHeadStart}
+          childcareActivityEligible={childcareActivityEligible} onActivityEligibleChange={setChildcareActivityEligible}
+          error={errors.childcare}
+        />
+      )}
+
+      {country.hasHousing && (
+        <div className="sf-group">
+          <div className="sf-group-title">Housing</div>
+          <div className="sf-row">
+            <div className="sf-field sf-grow">
+              <label htmlFor="tenure" className="sf-label-tip">
+                Tenure
+                <span className="sf-label-tooltip">
+                  Private rent is capped at the Local Housing Allowance
+                  rate. Social rent is not. Owners get no housing element.
+                </span>
+              </label>
+              <FormSelect
+                id="tenure"
+                label="Tenure"
+                value={tenureType}
+                onValueChange={setTenureType}
+                options={[
+                  { value: "OWNED_OUTRIGHT", label: "Owned outright" },
+                  { value: "OWNED_WITH_MORTGAGE", label: "Owned with a mortgage" },
+                  { value: "RENT_PRIVATELY", label: "Rented privately" },
+                  { value: "RENT_FROM_COUNCIL", label: "Rented from council" },
+                  { value: "RENT_FROM_HA", label: "Rented from housing association" },
+                ]}
+              />
+            </div>
+            <div className="sf-field sf-money">
+              <label className="sf-label-tip">
+                Rent
+                <span className="sf-label-tooltip">
+                  Yearly. Drives the housing element. Net income is shown
+                  after rent, and each household pays it when living apart.
+                </span>
+              </label>
+              <div className="sf-input-prefix">
+                <span>{country.currencySymbol}</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  aria-label="Annual rent"
+                  value={rentsApply ? rent : ""}
+                  placeholder={rentsApply ? "" : "n/a"}
+                  disabled={!rentsApply}
+                  className={errors.rent ? "input-error" : ""}
+                  onChange={(e) => handleIncomeChange(setRent, e.target.value)}
+                  onBlur={() => handleIncomeBlur(setRent, rent, "rent")}
                 />
               </div>
-            )}
+            </div>
+          </div>
+        </div>
+      )}
 
-            {(country.hasChildcare || country.hasCapital) && (
-              <div className="sf-group">
-                <div className="sf-group-title">Costs and capital</div>
-                <div className="sf-row">
-                  {country.hasChildcare && (
-                    <div className="sf-field sf-grow">
-                      <label className="sf-label-tip">
-                        Childcare
-                        <span className="sf-label-tooltip">
-                          Yearly. Only paid when the work condition is met, and
-                          capped per child. Split evenly across the children.
-                        </span>
-                      </label>
-                      <div className="sf-input-prefix">
-                        <span>{country.currencySymbol}</span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          aria-label="Annual childcare costs"
-                          value={childcareCosts}
-                          className={errors.childcareCosts ? "input-error" : ""}
-                          onChange={(e) => handleIncomeChange(setChildcareCosts, e.target.value)}
-                          onBlur={() => handleIncomeBlur(setChildcareCosts, childcareCosts, "childcareCosts")}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {country.hasCapital && (
-                    <div className="sf-field sf-grow">
-                      <label className="sf-label-tip">
-                        Savings
-                        <span className="sf-label-tooltip">
-                          Entitlement is nil above the upper capital limit.
-                          Split evenly between the two adults when living apart.
-                        </span>
-                      </label>
-                      <div className="sf-input-prefix">
-                        <span>{country.currencySymbol}</span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          aria-label="Savings"
-                          value={savings}
-                          className={errors.savings ? "input-error" : ""}
-                          onChange={(e) => handleIncomeChange(setSavings, e.target.value)}
-                          onBlur={() => handleIncomeBlur(setSavings, savings, "savings")}
-                        />
-                      </div>
-                    </div>
-                  )}
+      {country.hasHousing && tenureType === "RENT_PRIVATELY" && (
+        <div className="sf-field">
+          <label htmlFor="rental-market-area" className="sf-label-tip">
+            Rental market area
+            <span className="sf-label-tooltip">
+              Private rent is capped at the Local Housing Allowance rate
+              for the local Broad Rental Market Area, which varies widely.
+              Social rent is not capped, so this does not apply there.
+            </span>
+          </label>
+          <FormSelect
+            id="rental-market-area"
+            label="Rental market area"
+            value={brma}
+            onValueChange={setBrma}
+            options={UK_BRMAS.map((area) => ({ value: area.code, label: area.name }))}
+          />
+        </div>
+      )}
+
+      {(country.hasChildcare || country.hasCapital) && (
+        <div className="sf-group">
+          <div className="sf-group-title">Costs and capital</div>
+          <div className="sf-row">
+            {country.hasChildcare && (!isWizard || children.length > 0 || parseNumber(childcareCosts) > 0) && (
+              <div className="sf-field sf-grow">
+                <label className="sf-label-tip">
+                  Childcare
+                  <span className="sf-label-tooltip">
+                    Yearly. Only paid when the work condition is met, and
+                    capped per child. Split evenly across the children.
+                  </span>
+                </label>
+                <div className="sf-input-prefix">
+                  <span>{country.currencySymbol}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    aria-label="Annual childcare costs"
+                    value={childcareCosts}
+                    className={errors.childcareCosts ? "input-error" : ""}
+                    onChange={(e) => handleIncomeChange(setChildcareCosts, e.target.value)}
+                    onBlur={() => handleIncomeBlur(setChildcareCosts, childcareCosts, "childcareCosts")}
+                  />
+                </div>
+              </div>
+            )}
+            {country.hasCapital && (
+              <div className="sf-field sf-grow">
+                <label className="sf-label-tip">
+                  Savings
+                  <span className="sf-label-tooltip">
+                    Entitlement is nil above the upper capital limit.
+                    Split evenly between the two adults when living apart.
+                  </span>
+                </label>
+                <div className="sf-input-prefix">
+                  <span>{country.currencySymbol}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    aria-label="Savings"
+                    value={savings}
+                    className={errors.savings ? "input-error" : ""}
+                    onChange={(e) => handleIncomeChange(setSavings, e.target.value)}
+                    onBlur={() => handleIncomeBlur(setSavings, savings, "savings")}
+                  />
                 </div>
               </div>
             )}
           </div>
+        </div>
+      )}
+      {isWizard && country.hasHousing && (
+        <p className="wizard-default-note">
+          {rentsApply
+            ? "Results are after rent. When living apart, each household pays the annual rent entered here. Savings are split evenly between the adults."
+            : "No rent or mortgage costs are included for owners. Savings are split evenly between the adults when living apart."}
+        </p>
+      )}
+    </>
+  );
+
+  const stepTitles = ["Choose your comparison", "Describe your household", "Add relevant details"];
+  const stepDescriptions = [
+    "Choose where you live and what you want to compare.",
+    "Enter annual wages and salaries before tax for each adult, then add your children.",
+    "Review the defaults below and change the details that apply to your household.",
+  ];
+
+  return (
+    <form ref={formRef} className={`sidebar-form${isWizard ? " wizard-form" : ""}`} onSubmit={handleSubmit} noValidate={isWizard}>
+      {isWizard ? (
+        <>
+          <nav className="wizard-progress" aria-label="Setup progress">
+            <ol>
+              {["Comparison", "Household", "Details"].map((label, index) => (
+                <li key={label} aria-current={index === wizardStep ? "step" : undefined} className={index < wizardStep ? "is-complete" : undefined}>
+                  <span className="wizard-step-number" aria-hidden="true">{index + 1}</span>
+                  <span>{label}</span>
+                </li>
+              ))}
+            </ol>
+          </nav>
+          <section className="wizard-step" aria-labelledby="wizard-step-title" key={wizardStep}>
+            <h2 className="wizard-step-title" id="wizard-step-title" tabIndex={-1} ref={stepHeadingRef}>{stepTitles[wizardStep]}</h2>
+            <p className="wizard-description">{stepDescriptions[wizardStep]}</p>
+            {errors.form && <p role="alert" tabIndex={-1} className="sf-childcare-error">{errors.form}</p>}
+            {wizardStep === 0 && comparisonFields}
+            {wizardStep === 1 && (
+              <>
+                <div className="wizard-household">{adultFields}</div>
+                {childrenFields}
+              </>
+            )}
+            {wizardStep === 2 && detailsFields}
+          </section>
+          <div className="wizard-actions">
+            {wizardStep > 0 && <button type="button" className="wizard-back" onClick={() => { setErrors({}); setWizardStep(wizardStep - 1); }}>Back</button>}
+            <button type="submit" className="btn-calc wizard-next" disabled={loading}>
+              {loading ? <><span className="spinner" /> Calculating...</> : wizardStep === 2 ? "Calculate" : "Continue"}
+            </button>
+          </div>
+          {onExitWizard && <button type="button" className="wizard-skip" onClick={onExitWizard}>Use full form</button>}
+        </>
+      ) : (
+        <>
+          {comparisonFields}
+          {adultFields}
+          <details className="sf-more">
+            <summary className="sf-more-summary">
+              More details
+              {extrasInUse > 0 && <span className="sf-more-badge">{extrasInUse}</span>}
+            </summary>
+            <div className="sf-more-body">{detailsFields}</div>
+          </details>
+          <button type="submit" className="btn-calc" disabled={loading}>
+            {loading ? <><span className="spinner" /> Calculating...</> : "Calculate"}
+          </button>
+        </>
+      )}
+      {(!isWizard || wizardStep === 2) && (
+        <details className="sf-assumptions">
+          <summary className="sf-assumptions-summary">Assumptions</summary>
+          <div className="sf-assumptions-body" role="note" aria-label="Model assumptions">
+            <ul className="sf-assumptions-list">
+              {assumptions.map((assumption) => (
+                <li key={assumption}>{assumption}</li>
+              ))}
+            </ul>
+          </div>
         </details>
       )}
-
-      <button type="submit" className="btn-calc" disabled={loading}>
-        {loading ? <><span className="spinner" /> Calculating...</> : "Calculate"}
-      </button>
-
-      <details className="sf-assumptions">
-        <summary className="sf-assumptions-summary">Assumptions</summary>
-        <div className="sf-assumptions-body" role="note" aria-label="Model assumptions">
-          <ul className="sf-assumptions-list">
-            {assumptions.map((assumption) => (
-              <li key={assumption}>{assumption}</li>
-            ))}
-          </ul>
-        </div>
-      </details>
     </form>
   );
 }
 
-// The optional per-adult inputs, shown inside "More details" so the visible
-// form stays down to relationship status, region, year and your own income.
+// Shared adult follow-ups for the guided details step and the results editor.
 function ExtraAdultFields({
   title, accent, currencySymbol,
   income, onIncomeChange, onIncomeBlur, incomeError, showIncome,
@@ -975,7 +1118,7 @@ function PersonSection({
             <input type="checkbox" checked={hasESI} onChange={(e) => onESIChange(e.target.checked)} />
             <span className="sf-toggle-track"><span className="sf-toggle-thumb" /></span>
             Has ESI
-            <span className="sf-toggle-tooltip">Employer-sponsored insurance. If checked, healthcare benefits are excluded from the analysis.</span>
+            <span className="sf-toggle-tooltip">Employer-sponsored insurance affects healthcare eligibility. Healthcare values are shown separately from financial resources.</span>
           </label>
         )}
       </div>

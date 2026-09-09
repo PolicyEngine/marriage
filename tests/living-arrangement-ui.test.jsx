@@ -122,6 +122,7 @@ describe("living arrangement form", () => {
     let resolve;
     getCategorizedPrograms.mockImplementationOnce(() => new Promise((r) => { resolve = r; }));
     render(<MarriageApp initialCountry="us" />);
+    fireEvent.click(screen.getByRole("button", { name: "Use full form" }));
     fireEvent.click(screen.getByRole("button", { name: "Calculate" }));
     await selectLivingSeparately();
     await act(async () => { resolve(cohabitingResults); });

@@ -188,6 +188,10 @@ export default function MarriageApp({ initialCountry = null }) {
   const [showConfetti, setShowConfetti] = useState(false);
   const [externalIncomes, setExternalIncomes] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [guidedSetup, setGuidedSetup] = useState(true);
+  const resultsPanel = useRef(null);
+  const focusEditor = useRef(false);
+  const inputPanel = useRef(null);
   const didAutoCalc = useRef(false);
   const calculationId = useRef(0);
   const activeRequest = useRef(null);
@@ -204,8 +208,20 @@ export default function MarriageApp({ initialCountry = null }) {
     const resolvedCountry = decoded.current?.countryId || hashCountry || initialCountry || DEFAULT_COUNTRY;
     setCountryId(resolvedCountry);
     setIsEmbedded(window.self !== window.top);
+    setGuidedSetup(!decoded.current);
     setMounted(true);
   }, [initialCountry]);
+
+  useEffect(() => {
+    if (loading) resultsPanel.current?.focus();
+  }, [loading]);
+
+  useEffect(() => {
+    if (!guidedSetup && focusEditor.current) {
+      inputPanel.current?.querySelector("button, input")?.focus();
+      focusEditor.current = false;
+    }
+  }, [guidedSetup]);
 
   // Fire the tool_engaged conversion event after the user has been on
   // the page long enough to count as genuinely engaged. Matches the
@@ -353,6 +369,7 @@ export default function MarriageApp({ initialCountry = null }) {
   }
 
   async function handleCalculate(data) {
+    setGuidedSetup(false);
     // Retry the submitted values, never a partially edited form or mutable
     // object retained by the caller. Country changes clear this snapshot.
     const snapshot = { countryId, data: structuredClone(data) };
@@ -439,13 +456,19 @@ export default function MarriageApp({ initialCountry = null }) {
           </div>
         </header>
 
-        <div className="app-layout">
-          <aside className={`app-sidebar ${results ? "has-results" : ""} ${sidebarOpen ? "sidebar-open" : ""}`}>
-            {results && (
+        <div className={`app-layout${guidedSetup ? " app-layout--wizard" : ""}`}>
+          <aside
+            className={`app-sidebar ${results ? "has-results" : ""} ${sidebarOpen ? "sidebar-open" : ""}`}
+            role={guidedSetup ? "region" : undefined}
+            aria-label={guidedSetup ? "Set up your comparison" : "Your inputs"}
+          >
+            {results && !guidedSetup && (
               <button
                 type="button"
                 className="sidebar-toggle"
                 onClick={() => setSidebarOpen((v) => !v)}
+                aria-expanded={sidebarOpen}
+                aria-controls="comparison-inputs"
               >
                 <span className="sidebar-toggle-summary">
                   {formData?.regionCode || formData?.stateCode} &middot; {formatCurrency(formData?.headIncome ?? 0, false, country.currencySymbol)} &amp; {formatCurrency(formData?.spouseIncome ?? 0, false, country.currencySymbol)}
@@ -453,23 +476,35 @@ export default function MarriageApp({ initialCountry = null }) {
                 <span className="sidebar-toggle-arrow">{sidebarOpen ? "\u25B2" : "\u25BC"}</span>
               </button>
             )}
-            <div className="sidebar-collapsible">
-              <InputForm
-                key={mounted ? "ready" : "initial"}
-                country={country}
-                countries={isEmbedded ? null : COUNTRIES}
-                countryId={countryId}
-                onCountryChange={handleCountryChange}
-                onCalculate={(data) => { setSidebarOpen(false); handleCalculate(data); }}
-                onInputChange={clearResults}
-                loading={loading}
-                initialValues={decoded.current}
-                externalIncomes={externalIncomes}
-              />
+            <div className="sidebar-collapsible" id="comparison-inputs">
+              {!guidedSetup && (
+                <div className="editor-heading">
+                  <h2>Your inputs</h2>
+                  <button type="button" onClick={() => { setGuidedSetup(true); setSidebarOpen(true); }}>
+                    Guided setup
+                  </button>
+                </div>
+              )}
+              <div className="input-form-container" ref={inputPanel}>
+                <InputForm
+                  key={mounted ? "ready" : "initial"}
+                  mode={guidedSetup ? "wizard" : "editor"}
+                  onExitWizard={() => { focusEditor.current = true; setGuidedSetup(false); }}
+                  country={country}
+                  countries={isEmbedded ? null : COUNTRIES}
+                  countryId={countryId}
+                  onCountryChange={handleCountryChange}
+                  onCalculate={(data) => { setSidebarOpen(false); handleCalculate(data); }}
+                  onInputChange={clearResults}
+                  loading={loading}
+                  initialValues={decoded.current}
+                  externalIncomes={externalIncomes}
+                />
+              </div>
             </div>
           </aside>
 
-          <main className="app-main">
+          <section className="app-main" hidden={guidedSetup} ref={resultsPanel} tabIndex={-1} aria-label="Comparison results">
             {error && <div className="error" role="alert">
               <p>{error}</p>
               <button type="button" className="mt-3 rounded-md bg-primary px-4 py-2 font-medium text-white"
@@ -477,7 +512,7 @@ export default function MarriageApp({ initialCountry = null }) {
             </div>}
 
             {loading && (
-              <div className="main-placeholder">
+              <div className="main-placeholder" role="status">
                 <span className="spinner" /> Calculating...
               </div>
             )}
@@ -485,17 +520,15 @@ export default function MarriageApp({ initialCountry = null }) {
             {!results && !loading && !error && (
               <div className="main-placeholder main-placeholder--intro">
                 <div className="intro-card">
-                  <h2>What would marriage mean for your taxes?</h2>
+                  <h2>Calculate your comparison</h2>
                   <p>
-                    Tax and benefit rules can reward or punish marriage. Enter
-                    your household details on the left and we&rsquo;ll compare
-                    your net income if you stay unmarried or tie the knot, program
-                    by program.
+                    Review your inputs and select Calculate to compare financial
+                    resources, taxes, benefits, and service values.
                   </p>
                   <ul className="intro-highlights">
-                    <li>Federal and state taxes</li>
-                    <li>Means-tested benefits and credits</li>
-                    <li>Income heatmap across the full income range</li>
+                    <li>A breakdown by program</li>
+                    <li>Healthcare and early education shown separately</li>
+                    <li>An income grid to explore other earnings</li>
                   </ul>
                   <p className="intro-cta">Press <strong>Calculate</strong> to begin.</p>
                 </div>
@@ -519,7 +552,7 @@ export default function MarriageApp({ initialCountry = null }) {
                 hasChildren={Boolean(formData?.children?.length)}
               />
             )}
-          </main>
+          </section>
         </div>
 
         <footer className="app-footer">
