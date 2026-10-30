@@ -106,7 +106,8 @@ env -u MODAL_TOKEN_ID -u MODAL_TOKEN_SECRET uv run --project backend modal deplo
 
 Read the actual endpoint URL from that command's output. The app uses 2 CPUs and
 8 GiB per container, at most 8 containers, three simultaneous requests per
-container, and a 120-second timeout. One container stays warm so browser CORS
-preflights and the comparison's up-to-three calculation requests can reuse
-the loaded model. Extra containers scale down after 300 seconds idle.
-Memory snapshots retain the initialized model for subsequent cold starts.
+container, and a 120-second timeout. No container runs while the app is idle:
+containers scale down after 300 seconds without requests, so the first request
+after that waits for a cold start. Memory snapshots retain the initialized
+model for those cold starts, so a new container restores it instead of
+rebuilding it.
