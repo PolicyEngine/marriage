@@ -106,11 +106,13 @@ class FakeAuth0:
         if self.failure_while_reading is not None:
             body_stream = AnswerThatBreaksOff(self.failure_while_reading)
         else:
-            body = self.answer_body or {
-                "access_token": f"token-{len(self.token_requests)}",
-                "expires_in": self.lifetime_seconds,
-                "token_type": "Bearer",
-            }
+            body = self.answer_body
+            if body is None:
+                body = {
+                    "access_token": f"token-{len(self.token_requests)}",
+                    "expires_in": self.lifetime_seconds,
+                    "token_type": "Bearer",
+                }
             body_stream = io.BytesIO(json.dumps(body).encode())
         headers = http.client.HTTPMessage()
         for header_name, header_value in self.answer_headers.items():
@@ -313,11 +315,11 @@ def test_public_api_401_is_reported_without_requesting_another_token(
         },
         {"failure_before_answer": urllib.error.URLError(TimeoutError("timed out"))},
         {
-            "status_code": 307,
+            "status_code": 302,
             "answer_headers": {"Location": "https://elsewhere.example.test/token"},
         },
     ],
-    ids=["refused", "unreachable", "redirected"],
+    ids=["refused", "unreachable", "redirected-302"],
 )
 def test_failed_token_request_sends_nothing_and_keeps_the_secret_private(
     credential_settings, auth0, public_api, caplog, auth0_behaviour
@@ -347,8 +349,14 @@ def test_failed_token_request_sends_nothing_and_keeps_the_secret_private(
         },
         {"failure_while_reading": ConnectionResetError(54, "Connection reset")},
         {"failure_while_reading": http.client.IncompleteRead(b'{"access_tok', 40)},
+        {"answer_body": ["not", "an", "object"]},
     ],
-    ids=["closed-before-answer", "reset-while-reading", "incomplete-answer"],
+    ids=[
+        "closed-before-answer",
+        "reset-while-reading",
+        "incomplete-answer",
+        "answer-not-an-object",
+    ],
 )
 def test_token_answer_that_breaks_off_gives_the_usual_json_error(
     credential_settings, auth0, public_api, caplog, auth0_behaviour
@@ -375,6 +383,37 @@ def test_token_answer_that_breaks_off_gives_the_usual_json_error(
     assert response.json() == {"status": "error", "message": UNAVAILABLE_MESSAGE}
     assert public_api.calls == []
     assert CLIENT_SECRET not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "configured_url",
+    ["https://public-api.example.test:not-a-port", "http://public-api.example.test"],
+    ids=["malformed", "not-https"],
+)
+def test_unusable_public_api_url_is_refused_before_any_request(
+    monkeypatch, credential_settings, auth0, public_api, configured_url
+):
+    from backend.web import web_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setenv("POLICYENGINE_API_URL", configured_url)
+
+    with TestClient(web_app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/uk/calculate",
+            json={"household": uk_household(), "accounting_version": 1},
+            headers={"Origin": "https://policyengine.org"},
+        )
+
+    assert response.status_code == 500
+    assert response.headers.get("content-type") == "application/json"
+    assert response.headers.get("access-control-allow-origin") == "*"
+    assert response.json() == {
+        "status": "error",
+        "message": "The UK calculation service is not configured.",
+    }
+    assert auth0.token_requests == []
+    assert public_api.calls == []
 
 
 def test_slow_token_request_shortens_the_public_api_timeout(
