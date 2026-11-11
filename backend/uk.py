@@ -29,7 +29,8 @@ from backend.simulation import (
 
 LOGGER = logging.getLogger(__name__)
 UK_CALCULATE_PATH = "/uk/calculate"
-# Covers the token request too, so a request stays within Modal's 120 seconds.
+# Less any time spent getting a token. httpx applies it to each connection and
+# read, so it does not limit the whole request (see backend/README.md).
 UK_API_TIMEOUT_SECONDS = 110
 RENTED_TENURES = {"RENT_PRIVATELY", "RENT_FROM_COUNCIL", "RENT_FROM_HA"}
 
@@ -167,7 +168,7 @@ def post_to_public_api(situation):
             api_url = tokens.settings.api_url
             headers["Authorization"] = f"Bearer {tokens.access_token()}"
     except PublicApiSettingsError as error:
-        LOGGER.error("The Public API settings are incomplete. %s", error)
+        LOGGER.error("The Public API settings are missing or unusable. %s", error)
         raise CalculationError(
             "The UK calculation service is not configured."
         ) from None
