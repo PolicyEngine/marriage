@@ -65,7 +65,7 @@ childcare once, including Vermont's collectible family share.
 It sends the UK entity shape to the Public API's `/uk/calculate`
 (`https://api.policyengine.org` unless `POLICYENGINE_API_URL` names another)
 with this backend's own credential (see below) and a 110-second upstream
-timeout, which includes any token request. Its versioned series subtracts entered rent from
+timeout, less any time spent getting a token. Its versioned series subtracts entered rent from
 net income only for renters, exposes that deduction as `rent_deducted`, and
 aliases the result as `financial_resources` and `combined_resources`. This
 preserves the calculator's existing UK rent treatment; the proxy applies no
@@ -124,9 +124,11 @@ request creates if it does not exist yet. So containers share one token
 instead of each asking Auth0 for its own. Only the token and its replacement
 time are stored.
 
-A token request that Auth0 refuses, redirects, breaks off or does not answer
-within 10 seconds returns the usual 500 "unavailable" error and sends nothing
-to the Public API.
+A token request that Auth0 refuses, redirects, breaks off or answers without a
+token, or that times out, returns the usual 500 "unavailable" error and sends
+nothing to the Public API. The 10-second token timeout and the 110-second
+upstream timeout apply to each connection and each read, not to the whole
+request.
 A 401 from the Public API is logged with the client ID and is never answered
 with a new token, which would be refused too; check that the client is on the
 Public API's `PUBLIC_API_SERVER_CLIENT_IDS` and that its tenant and audience
@@ -137,13 +139,18 @@ manual live UK workflow, the proxy calls `https://api.policyengine.org`
 without a credential, which the Public API serves until it requires one.
 Inside a Modal container the five are required, so empty values in the secret
 fail every UK request instead of silently dropping the credential. Setting
-only some of them is refused everywhere. Both failures are a 500 whose log
-names the missing variables and no value.
+only some of them is refused everywhere, and so is a `POLICYENGINE_API_URL`
+that is not an https URL. Each of these failures is a 500 whose log names the
+variables and no value.
 
 Containers restored from a memory snapshot keep the environment the snapshot
 was taken with, so redeploy after changing the secret. To stop using a token
 before it expires, clear the Dict
 (`modal dict clear marriage-household-api-public-api-token`) and redeploy.
+
+Don't run `modal serve` on this app. It attaches the same production secret
+and token Dict, so code under development would call the production Public API
+with the production client. No staging client exists for this backend.
 
 ## Deployment
 

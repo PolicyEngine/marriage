@@ -25,6 +25,8 @@ import os
 import threading
 import time
 
+import httpx
+
 from backend.public_api_token import (
     SETTING_VARIABLES,
     PublicApiSettings,
@@ -59,6 +61,7 @@ def public_api_tokens() -> PublicApiTokenProvider | None:
             )
         return None
     settings = PublicApiSettings.from_environment()
+    _check_api_url(settings.api_url)
     with _token_providers_lock:
         provider = _token_providers.get(settings)
         if provider is None:
@@ -68,6 +71,17 @@ def public_api_tokens() -> PublicApiTokenProvider | None:
             )
             _token_providers[settings] = provider
         return provider
+
+
+def _check_api_url(api_url: str) -> None:
+    """Refuses an address httpx cannot use, or one that would send the token
+    unencrypted."""
+    try:
+        parsed_url = httpx.URL(api_url)
+    except httpx.InvalidURL:
+        parsed_url = None
+    if parsed_url is None or parsed_url.scheme != "https" or not parsed_url.host:
+        raise PublicApiSettingsError("POLICYENGINE_API_URL must be an https URL.")
 
 
 def _running_on_modal() -> bool:

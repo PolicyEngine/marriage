@@ -2,10 +2,11 @@
 
 Copied from templates/public_api_token.py of the policyengine-api-access skill
 (PolicyEngine/policyengine-skills, commit 2e751e5), reformatted for this
-repository's Ruff settings, with one change: a connection that fails while
+repository's Ruff settings, with two changes: a connection that fails while
 Auth0's answer is read (OSError, http.client.HTTPException) also becomes
-PublicApiTokenError. In this backend, backend/public_api.py does the Modal
-wiring that the example below describes.
+PublicApiTokenError, and so does an answer that is not a JSON object. In this
+backend, backend/public_api.py does the Modal wiring that the example below
+describes.
 
 Copy this file into a server that calls the Public API (api.policyengine.org)
 itself: a Modal backend, a Cloud Run service or a scheduled job. Browser code
@@ -268,6 +269,8 @@ class PublicApiTokenProvider:
                 f"The Auth0 token request failed: {error}"
             ) from None
 
+        if not isinstance(answer, dict):
+            answer = {}
         access_token = answer.get("access_token")
         lifetime_seconds = answer.get("expires_in")
         if (
