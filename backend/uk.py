@@ -5,12 +5,16 @@ calculator's household-cost reconciliation moves here from the browser.
 """
 
 import json
+import logging
 import math
 import re
+import time
 from copy import deepcopy
 
 import httpx
 
+from backend.public_api import PRODUCTION_API_URL, public_api_tokens
+from backend.public_api_token import PublicApiSettingsError, PublicApiTokenError
 from backend.simulation import (
     MAX_AMOUNT,
     MAX_AXIS_COUNT,
@@ -23,7 +27,10 @@ from backend.simulation import (
     _year,
 )
 
-UK_API_URL = "https://api.policyengine.org/uk/calculate"
+LOGGER = logging.getLogger(__name__)
+UK_CALCULATE_PATH = "/uk/calculate"
+# Covers the token request too, so a request stays within Modal's 120 seconds.
+UK_API_TIMEOUT_SECONDS = 110
 RENTED_TENURES = {"RENT_PRIVATELY", "RENT_FROM_COUNCIL", "RENT_FROM_HA"}
 
 
@@ -146,6 +153,47 @@ def reconcile_uk_result(household, result, requested, year, count):
     }
 
 
+def post_to_public_api(situation):
+    """Posts a UK household to the Public API, with this backend's token if set.
+
+    A 401 is logged and returned like any other answer: a new token would be
+    refused too, so none is requested (backend/public_api_token.py).
+    """
+    started = time.monotonic()
+    try:
+        tokens = public_api_tokens()
+        api_url, headers = PRODUCTION_API_URL, {}
+        if tokens is not None:
+            api_url = tokens.settings.api_url
+            headers["Authorization"] = f"Bearer {tokens.access_token()}"
+    except PublicApiSettingsError as error:
+        LOGGER.error("The Public API settings are incomplete. %s", error)
+        raise CalculationError(
+            "The UK calculation service is not configured."
+        ) from None
+    except PublicApiTokenError as error:
+        LOGGER.error("No Public API token for a UK calculation: %s", error)
+        raise CalculationError(
+            "The UK calculation service is unavailable. Try again."
+        ) from None
+    elapsed_seconds = time.monotonic() - started
+    response = httpx.post(
+        f"{api_url}{UK_CALCULATE_PATH}",
+        json={"household": situation},
+        headers=headers,
+        timeout=max(UK_API_TIMEOUT_SECONDS - elapsed_seconds, 1.0),
+        follow_redirects=False,
+    )
+    if response.status_code == 401 and tokens is not None:
+        LOGGER.error(
+            "The Public API refused client %s with HTTP 401. Check that the "
+            "client is on its PUBLIC_API_SERVER_CLIENT_IDS and that its tenant and "
+            "audience match; no new token is requested.",
+            tokens.settings.client_id,
+        )
+    return response
+
+
 def calculate_uk_household(household, accounting_version=None):
     if accounting_version is not None and (
         type(accounting_version) is not int or accounting_version != 1
@@ -160,12 +208,7 @@ def calculate_uk_household(household, accounting_version=None):
         situation["households"][name]["household_net_income"] = {year: None}
         requested.append(("households", name, "household_net_income", year))
     try:
-        response = httpx.post(
-            UK_API_URL,
-            json={"household": situation},
-            timeout=110,
-            follow_redirects=False,
-        )
+        response = post_to_public_api(situation)
         response.raise_for_status()
         data = response.json()
     except (httpx.HTTPError, ValueError) as error:

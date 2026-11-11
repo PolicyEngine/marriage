@@ -28,6 +28,9 @@ bun run test:ci tests/request-recovery.test.jsx tests/api.test.js
 `bun run test:live:uk` starts the current checkout's backend and runs the UK
 integration suites through its UK adapter. These tests call the external public
 PolicyEngine UK model, so their availability and results depend on that service.
+The local backend sends no Public API credential unless the five
+`POLICYENGINE_API_*` variables in [the backend README](../backend/README.md)
+are set, so these checks stop working once the Public API requires one.
 They run separately from standard CI. To run them in GitHub Actions, dispatch
 the separate **Live UK integration checks** workflow.
 

@@ -14,11 +14,28 @@ image = (
     .add_local_file(backend_dir / "accounting.py", "/root/backend/accounting.py")
     .add_local_file(backend_dir / "web.py", "/root/backend/web.py")
     .add_local_file(backend_dir / "uk.py", "/root/backend/uk.py")
+    .add_local_file(backend_dir / "public_api.py", "/root/backend/public_api.py")
+    .add_local_file(
+        backend_dir / "public_api_token.py", "/root/backend/public_api_token.py"
+    )
+)
+# The Public API address and this backend's Auth0 client (backend/public_api.py).
+# Deploying fails if the secret or any of these keys is missing.
+public_api_secret = modal.Secret.from_name(
+    "marriage-household-api-policyengine-api",
+    required_keys=[
+        "POLICYENGINE_API_URL",
+        "POLICYENGINE_API_AUTH0_DOMAIN",
+        "POLICYENGINE_API_AUTH0_AUDIENCE",
+        "POLICYENGINE_API_AUTH0_CLIENT_ID",
+        "POLICYENGINE_API_AUTH0_CLIENT_SECRET",
+    ],
 )
 
 
 @app.cls(
     image=image,
+    secrets=[public_api_secret],
     cpu=2,
     memory=8192,
     timeout=120,
