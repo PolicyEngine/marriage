@@ -8,10 +8,12 @@ Each request then carries that client's token in Authorization. Containers
 share the token through the Modal Dict "marriage-household-api-public-api-token",
 so the deployment asks Auth0 for about one token a day, not one per container.
 
-With none of the five settings (local runs and the manual "Live UK integration
-checks" workflow), requests go to https://api.policyengine.org without a
-credential, as before; the Public API serves them until it requires one. A
-partial set is refused, so a broken secret cannot pass for "no credential".
+Outside Modal, with none of the five settings (local runs and the manual
+"Live UK integration checks" workflow), requests go to
+https://api.policyengine.org without a credential, as before; the Public API
+serves them until it requires one. Inside a Modal container the settings are
+required, and a partial set is refused everywhere, so a broken secret cannot
+pass for "no credential".
 
 Settings and tokens are read when a request needs them, never at import or in
 the Modal memory-snapshot step, so no token is stored in a snapshot.
@@ -26,7 +28,9 @@ import time
 from backend.public_api_token import (
     SETTING_VARIABLES,
     PublicApiSettings,
+    PublicApiSettingsError,
     PublicApiTokenProvider,
+    SharedTokenStore,
 )
 
 PRODUCTION_API_URL = "https://api.policyengine.org"
@@ -42,12 +46,17 @@ def public_api_tokens() -> PublicApiTokenProvider | None:
     One provider exists per set of settings, so one token is cached per client.
 
     Raises:
-        PublicApiSettingsError: only some of the five settings are present.
+        PublicApiSettingsError: only some of the five settings are present,
+            or none inside a Modal container.
     """
     if not any(
         os.environ.get(variable_name, "").strip()
         for variable_name in SETTING_VARIABLES.values()
     ):
+        if _running_on_modal():
+            raise PublicApiSettingsError(
+                f"Set {', '.join(SETTING_VARIABLES.values())}."
+            )
         return None
     settings = PublicApiSettings.from_environment()
     with _token_providers_lock:
@@ -61,10 +70,16 @@ def public_api_tokens() -> PublicApiTokenProvider | None:
         return provider
 
 
-def _shared_token_store():
-    """The Modal Dict inside a Modal container; nothing to share elsewhere."""
+def _running_on_modal() -> bool:
     import modal
 
-    if modal.is_local():
+    return not modal.is_local()
+
+
+def _shared_token_store() -> SharedTokenStore | None:
+    """The Modal Dict inside a Modal container; nothing to share elsewhere."""
+    if not _running_on_modal():
         return None
+    import modal
+
     return modal.Dict.from_name(TOKEN_STORE_NAME, create_if_missing=True)

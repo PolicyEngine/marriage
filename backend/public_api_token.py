@@ -2,8 +2,10 @@
 
 Copied from templates/public_api_token.py of the policyengine-api-access skill
 (PolicyEngine/policyengine-skills, commit 2e751e5), reformatted for this
-repository's Ruff settings. In this backend, backend/public_api.py does the
-Modal wiring that the example below describes.
+repository's Ruff settings, with one change: a connection that fails while
+Auth0's answer is read (OSError, http.client.HTTPException) also becomes
+PublicApiTokenError. In this backend, backend/public_api.py does the Modal
+wiring that the example below describes.
 
 Copy this file into a server that calls the Public API (api.policyengine.org)
 itself: a Modal backend, a Cloud Run service or a scheduled job. Browser code
@@ -61,6 +63,7 @@ secret, or the token, to wherever it points.
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import os
@@ -258,7 +261,9 @@ class PublicApiTokenProvider:
             raise PublicApiTokenError(
                 f"Auth0 refused the token request with HTTP {error.code} {error_code}".strip()
             ) from None
-        except (urllib.error.URLError, TimeoutError, ValueError) as error:
+        # urllib wraps only failures while sending in URLError; reading the
+        # answer can raise any OSError or http.client.HTTPException.
+        except (OSError, http.client.HTTPException, ValueError) as error:
             raise PublicApiTokenError(
                 f"The Auth0 token request failed: {error}"
             ) from None

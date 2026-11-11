@@ -120,20 +120,25 @@ the secret or any of its five keys is missing. `public_api_token.py`, copied
 from the policyengine-api-access skill, requests one token and keeps it until
 five minutes before it expires (tokens last 24 hours): in memory, and in the
 Modal Dict `marriage-household-api-public-api-token`, which the first UK
-request after a deploy creates. So containers share one token instead of each
-asking Auth0 for its own. Only the token and its replacement time are stored.
+request creates if it does not exist yet. So containers share one token
+instead of each asking Auth0 for its own. Only the token and its replacement
+time are stored.
 
-A token request that Auth0 refuses or does not answer within 10 seconds
-returns the usual 500 "unavailable" error and sends nothing to the Public API.
+A token request that Auth0 refuses, redirects, breaks off or does not answer
+within 10 seconds returns the usual 500 "unavailable" error and sends nothing
+to the Public API.
 A 401 from the Public API is logged with the client ID and is never answered
 with a new token, which would be refused too; check that the client is on the
 Public API's `PUBLIC_API_SERVER_CLIENT_IDS` and that its tenant and audience
 match. Neither the client secret nor the token is logged.
 
-Without any of the five variables, as in local runs and the manual live UK
-workflow, the proxy calls `https://api.policyengine.org` without a credential,
-which the Public API serves until it requires one. Setting only some of them
-is refused with a 500 that names no value.
+Outside Modal, without any of the five variables, as in local runs and the
+manual live UK workflow, the proxy calls `https://api.policyengine.org`
+without a credential, which the Public API serves until it requires one.
+Inside a Modal container the five are required, so empty values in the secret
+fail every UK request instead of silently dropping the credential. Setting
+only some of them is refused everywhere. Both failures are a 500 whose log
+names the missing variables and no value.
 
 Containers restored from a memory snapshot keep the environment the snapshot
 was taken with, so redeploy after changing the secret. To stop using a token
