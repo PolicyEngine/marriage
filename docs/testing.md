@@ -28,6 +28,10 @@ bun run test:ci tests/request-recovery.test.jsx tests/api.test.js
 `bun run test:live:uk` starts the current checkout's backend and runs the UK
 integration suites through its UK adapter. These tests call the external public
 PolicyEngine UK model, so their availability and results depend on that service.
+The local backend sends no Public API credential, and no Auth0 client exists
+for local runs or this workflow (the production client in
+[the backend README](../backend/README.md) is for the Modal app only). So
+these checks stop working once the Public API requires a credential.
 They run separately from standard CI. To run them in GitHub Actions, dispatch
 the separate **Live UK integration checks** workflow.
 

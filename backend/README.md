@@ -62,8 +62,10 @@ full payment, `child_care_subsidies` is the recognized spending reduction,
 childcare once, including Vermont's collectible family share.
 
 `POST /uk/calculate` accepts `household` and optional `accounting_version: 1`.
-It sends the UK entity shape to `https://api.policyengine.org/uk/calculate` with
-a 110-second upstream timeout. Its versioned series subtracts entered rent from
+It sends the UK entity shape to the Public API's `/uk/calculate`
+(`https://api.policyengine.org` unless `POLICYENGINE_API_URL` names another)
+with this backend's own credential (see below) and a 110-second upstream
+timeout, less any time spent getting a token. Its versioned series subtracts entered rent from
 net income only for renters, exposes that deduction as `rent_deducted`, and
 aliases the result as `financial_resources` and `combined_resources`. This
 preserves the calculator's existing UK rent treatment; the proxy applies no
@@ -97,6 +99,60 @@ errors return 500 with the variable name. No missing results become zero.
 Requests support one household, at most 12 people, 512 requested outputs, one
 year from 2022 through 2035, and at most two axes of 33 points each. The JSON body
 limit is 256 KiB. The service neither stores nor logs household inputs.
+
+## Public API credential
+
+The UK proxy sends this backend's own Auth0 client-credentials token to the
+Public API in `Authorization: Bearer`. The Modal secret
+`marriage-household-api-policyengine-api` (workspace `policyengine`) provides
+five variables at run time:
+
+| Variable | Production value |
+| --- | --- |
+| `POLICYENGINE_API_URL` | `https://api.policyengine.org` |
+| `POLICYENGINE_API_AUTH0_DOMAIN` | `policyengine-api.uk.auth0.com`, a host name without a scheme |
+| `POLICYENGINE_API_AUTH0_AUDIENCE` | `https://api.policyengine.org/` |
+| `POLICYENGINE_API_AUTH0_CLIENT_ID` | the `marriage-household-api (Modal)` client |
+| `POLICYENGINE_API_AUTH0_CLIENT_SECRET` | that client's secret |
+
+`modal_app.py` attaches the secret to `HouseholdAPI`, and deploying fails if
+the secret or any of its five keys is missing. `public_api_token.py`, copied
+from the policyengine-api-access skill, requests one token and keeps it until
+five minutes before it expires (tokens last 24 hours): in memory, and in the
+Modal Dict `marriage-household-api-public-api-token`, which the first UK
+request creates if it does not exist yet. So containers share one token
+instead of each asking Auth0 for its own. Only the token and its replacement
+time are stored.
+
+A token request that Auth0 refuses, redirects, breaks off or answers without a
+token, or that times out, returns the usual 500 "unavailable" error and sends
+nothing to the Public API. The 10-second token timeout and the 110-second
+upstream timeout apply to each connection and each read, not to the whole
+request.
+A 401 from the Public API is logged with the client ID and is never answered
+with a new token, which would be refused too; check that the client is on the
+Public API's `PUBLIC_API_SERVER_CLIENT_IDS` and that its tenant and audience
+match. Neither the client secret nor the token is logged.
+
+Outside Modal, without any of the five variables, as in local runs and the
+manual live UK workflow, the proxy calls `https://api.policyengine.org`
+without a credential, which the Public API serves until it requires one.
+Inside a Modal container the five are required, so empty values in the secret
+fail every UK request instead of silently dropping the credential. Setting
+only some of them is refused everywhere, and so is a `POLICYENGINE_API_URL`
+that is not an https URL. Each of these failures is a 500 whose log names the
+variables and no value.
+
+Containers restored from a memory snapshot keep the environment the snapshot
+was taken with, so redeploy after changing the secret. To stop using a token
+before it expires, clear the Dict
+(`modal dict clear marriage-household-api-public-api-token`) and redeploy.
+
+Don't run `modal serve` on this app. It attaches the same production secret
+and token Dict, so code under development would call the production Public API
+with the production client. No staging client exists for this backend.
+
+## Deployment
 
 Deploy with the intended PolicyEngine Modal workspace selected:
 
